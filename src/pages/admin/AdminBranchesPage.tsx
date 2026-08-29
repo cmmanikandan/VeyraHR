@@ -135,6 +135,23 @@ export const AdminBranchesPage: React.FC = () => {
     }
     setDetectingGps(true);
     setGpsError(null);
+
+    const runFallbackQuery = () => {
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          setNewLat(pos.coords.latitude.toFixed(6));
+          setNewLng(pos.coords.longitude.toFixed(6));
+          setUserGps({ lat: pos.coords.latitude, lng: pos.coords.longitude });
+          setDetectingGps(false);
+        },
+        (err) => {
+          setGpsError(`Unable to fetch device GPS: ${err.message}. Please allow location permissions in your browser.`);
+          setDetectingGps(false);
+        },
+        { enableHighAccuracy: false, timeout: 12000 }
+      );
+    };
+
     navigator.geolocation.getCurrentPosition(
       (pos) => {
         setNewLat(pos.coords.latitude.toFixed(6));
@@ -143,10 +160,10 @@ export const AdminBranchesPage: React.FC = () => {
         setDetectingGps(false);
       },
       (err) => {
-        setGpsError(`Unable to fetch device GPS: ${err.message}. Please allow location permissions.`);
-        setDetectingGps(false);
+        console.warn('High accuracy geolocation lookup failed, trying fallback...', err);
+        runFallbackQuery();
       },
-      { enableHighAccuracy: true, timeout: 10000 }
+      { enableHighAccuracy: true, timeout: 5000 }
     );
   };
 
