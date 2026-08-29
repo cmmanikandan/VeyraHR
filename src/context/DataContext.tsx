@@ -410,9 +410,10 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     refreshData();
   }, [refreshData]);
 
-  // ── SUPABASE REALTIME: Live attendance push (no manual refresh needed) ──
+  // ── Realtime listeners for live cross-device sync ──
   useEffect(() => {
-    const channel = supabase
+    // ── Realtime listener for attendance ──
+    const attendanceChannel = supabase
       .channel('veyra-attendance-live')
       .on(
         'postgres_changes',
@@ -423,13 +424,11 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
           setAttendance((prev) => {
             const idx = prev.findIndex((a) => a.id === record.id);
             if (idx !== -1) {
-              // UPDATE existing record
               const updated = [...prev];
               updated[idx] = { ...updated[idx], ...record };
               try { localStorage.setItem('veyra_attendance', JSON.stringify(updated)); } catch {}
               return updated;
             } else {
-              // INSERT new record
               const updated = [record, ...prev];
               try { localStorage.setItem('veyra_attendance', JSON.stringify(updated)); } catch {}
               return updated;
@@ -439,8 +438,84 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       )
       .subscribe();
 
+    // ── Realtime listener for branches (cross-device sync) ──
+    const branchChannel = supabase
+      .channel('veyra-branches-live')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'branches' },
+        (payload) => {
+          if (payload.eventType === 'INSERT') {
+            const newBranch = payload.new as Branch;
+            if (!newBranch?.id) return;
+            setBranches((prev) => {
+              if (prev.some((b) => b.id === newBranch.id)) return prev;
+              const updated = [newBranch, ...prev];
+              try { localStorage.setItem('veyra_branches_data', JSON.stringify(updated)); } catch {}
+              return updated;
+            });
+          } else if (payload.eventType === 'DELETE') {
+            const oldId = payload.old?.id;
+            if (!oldId) return;
+            setBranches((prev) => {
+              const updated = prev.filter((b) => b.id !== oldId);
+              try { localStorage.setItem('veyra_branches_data', JSON.stringify(updated)); } catch {}
+              return updated;
+            });
+          } else if (payload.eventType === 'UPDATE') {
+            const updatedBranch = payload.new as Branch;
+            if (!updatedBranch?.id) return;
+            setBranches((prev) => {
+              const updated = prev.map((b) => (b.id === updatedBranch.id ? { ...b, ...updatedBranch } : b));
+              try { localStorage.setItem('veyra_branches_data', JSON.stringify(updated)); } catch {}
+              return updated;
+            });
+          }
+        }
+      )
+      .subscribe();
+
+    // ── Realtime listener for employees (cross-device sync) ──
+    const employeeChannel = supabase
+      .channel('veyra-employees-live')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'employees' },
+        (payload) => {
+          if (payload.eventType === 'INSERT') {
+            const newEmp = payload.new as Employee;
+            if (!newEmp?.id) return;
+            setEmployees((prev) => {
+              if (prev.some((e) => e.id === newEmp.id)) return prev;
+              const updated = [newEmp, ...prev];
+              try { localStorage.setItem('veyra_employees', JSON.stringify(updated)); } catch {}
+              return updated;
+            });
+          } else if (payload.eventType === 'DELETE') {
+            const oldId = payload.old?.id;
+            if (!oldId) return;
+            setEmployees((prev) => {
+              const updated = prev.filter((e) => e.id !== oldId);
+              try { localStorage.setItem('veyra_employees', JSON.stringify(updated)); } catch {}
+              return updated;
+            });
+          } else if (payload.eventType === 'UPDATE') {
+            const updatedEmp = payload.new as Employee;
+            if (!updatedEmp?.id) return;
+            setEmployees((prev) => {
+              const updated = prev.map((e) => (e.id === updatedEmp.id ? { ...e, ...updatedEmp } : e));
+              try { localStorage.setItem('veyra_employees', JSON.stringify(updated)); } catch {}
+              return updated;
+            });
+          }
+        }
+      )
+      .subscribe();
+
     return () => {
-      supabase.removeChannel(channel);
+      supabase.removeChannel(attendanceChannel);
+      supabase.removeChannel(branchChannel);
+      supabase.removeChannel(employeeChannel);
     };
   }, []);
 
@@ -1045,7 +1120,21 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const createCompanyBranch = async (b: Omit<Branch, 'id'>) => {
     const newBranch: Branch = { ...b, id: `b_${Date.now()}` };
     try {
-      await supabase.from('branches').insert(newBranch);
+      const { error } = await supabase.from('branches').insert(newBranch);
+      if (error) {
+        console.warn('Full branch insert notice, trying core columns fallback:', error);
+        // Fallback to core columns if optional columns are pending migration
+        await supabase.from('branches').insert({
+          id: newBranch.id,
+          company_id: newBranch.company_id || 'comp_veyra_tn',
+          name: newBranch.name,
+          city: newBranch.city,
+          district: newBranch.district || newBranch.city,
+          address: newBranch.address,
+          pincode: newBranch.pincode,
+          manager: newBranch.manager || 'Admin',
+        });
+      }
     } catch (e) {
       console.warn('Branch sync:', e);
     }

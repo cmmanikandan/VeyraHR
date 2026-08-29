@@ -95,11 +95,19 @@ CREATE TABLE public.branches (
   id TEXT PRIMARY KEY DEFAULT uuid_generate_v4()::text,
   company_id TEXT REFERENCES public.companies(id) ON DELETE CASCADE,
   name VARCHAR(150) NOT NULL,
+  code VARCHAR(50),
   district VARCHAR(100),
   city VARCHAR(100),
+  state VARCHAR(100) DEFAULT 'Tamil Nadu',
+  country VARCHAR(100) DEFAULT 'India',
   address TEXT,
   pincode VARCHAR(20),
   manager VARCHAR(150),
+  latitude NUMERIC DEFAULT 12.9654,
+  longitude NUMERIC DEFAULT 80.2461,
+  radius_meters INT DEFAULT 150,
+  working_hours VARCHAR(100) DEFAULT '09:00 AM - 06:00 PM',
+  is_headquarters BOOLEAN DEFAULT FALSE,
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
