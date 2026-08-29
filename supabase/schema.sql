@@ -144,6 +144,7 @@ CREATE TABLE public.profiles (
   branch_name VARCHAR(150) DEFAULT 'Chennai HQ',
   department_access VARCHAR(150) DEFAULT 'All Departments',
   status VARCHAR(20) DEFAULT 'Active',
+  password TEXT,                             -- Plain-text password for app-level auth (cross-device)
   notification_preferences JSONB DEFAULT '{"leave": true, "attendance": true, "shift": true, "announcements": true}'::jsonb,
   last_login TIMESTAMPTZ DEFAULT NOW(),
   created_at TIMESTAMPTZ DEFAULT NOW(),
@@ -166,6 +167,7 @@ CREATE TABLE public.hr_managers (
   status VARCHAR(20) DEFAULT 'Active',
   last_login TIMESTAMPTZ DEFAULT NOW(),
   avatar_url TEXT,
+  password TEXT,                             -- Plain-text password for app-level auth (cross-device)
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
@@ -206,6 +208,7 @@ CREATE TABLE public.employees (
   address TEXT,
   status VARCHAR(20) DEFAULT 'Active', -- 'Active', 'Inactive', 'On Leave'
   avatar_url TEXT,
+  password TEXT,                         -- Plain-text password for app-level auth (cross-device)
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );

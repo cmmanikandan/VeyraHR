@@ -147,13 +147,61 @@ export const LoginModal: React.FC<LoginModalProps> = ({
       // Check live Supabase Database if not found locally
       if (!empMatch) {
         try {
-          const { data: dbEmp } = await supabase
+          // Try employees table by email, employee_id, or phone
+          const { data: dbEmpByEmail } = await supabase
             .from('employees')
             .select('*')
-            .or(`email.ilike.${cleanInput},employee_id.ilike.${cleanInput},id.eq.${cleanInput}`)
+            .ilike('email', cleanInput)
             .maybeSingle();
-          if (dbEmp) {
-            empMatch = dbEmp;
+          if (dbEmpByEmail) {
+            empMatch = dbEmpByEmail;
+          } else {
+            const { data: dbEmpById } = await supabase
+              .from('employees')
+              .select('*')
+              .ilike('employee_id', cleanInput)
+              .maybeSingle();
+            if (dbEmpById) {
+              empMatch = dbEmpById;
+            } else {
+              const { data: dbEmpByPhone } = await supabase
+                .from('employees')
+                .select('*')
+                .eq('phone', cleanInput)
+                .maybeSingle();
+              if (dbEmpByPhone) empMatch = dbEmpByPhone;
+            }
+          }
+        } catch {}
+      }
+
+      // Also check profiles table if still not found
+      if (!empMatch) {
+        try {
+          const { data: profileData } = await supabase
+            .from('profiles')
+            .select('*')
+            .or(`email.ilike.${cleanInput},phone.eq.${cleanInput}`)
+            .eq('role', 'employee')
+            .maybeSingle();
+          if (profileData) {
+            // Treat profile data as employee record
+            empMatch = {
+              id: profileData.id,
+              employee_id: profileData.employee_id || cleanInput,
+              first_name: profileData.full_name?.split(' ')[0] || 'Employee',
+              last_name: profileData.full_name?.split(' ').slice(1).join(' ') || '',
+              email: profileData.email,
+              department_name: profileData.department_access || 'General',
+              branch_name: profileData.branch_name || 'Main Office',
+              designation: profileData.designation || 'Staff',
+              joining_date: profileData.joining_date || new Date().toISOString().split('T')[0],
+              work_location: profileData.branch_name || 'Main Office',
+              status: profileData.status || 'Active',
+              avatar_url: profileData.avatar_url,
+              password: profileData.password,
+              company_id: profileData.company_id || 'comp_veyra_tn',
+            } as any;
           }
         } catch {}
       }
@@ -171,10 +219,41 @@ export const LoginModal: React.FC<LoginModalProps> = ({
           const { data: dbHr } = await supabase
             .from('hr_managers')
             .select('*')
-            .or(`email.ilike.${cleanInput},id.eq.${cleanInput}`)
+            .ilike('email', cleanInput)
             .maybeSingle();
           if (dbHr) {
             hrMatch = dbHr;
+          } else {
+            const { data: dbHrByPhone } = await supabase
+              .from('hr_managers')
+              .select('*')
+              .eq('phone', cleanInput)
+              .maybeSingle();
+            if (dbHrByPhone) {
+              hrMatch = dbHrByPhone;
+            } else {
+              // Also check profiles with hr_manager role
+              const { data: hrProfile } = await supabase
+                .from('profiles')
+                .select('*')
+                .or(`email.ilike.${cleanInput},phone.eq.${cleanInput}`)
+                .eq('role', 'hr_manager')
+                .maybeSingle();
+              if (hrProfile) {
+                hrMatch = {
+                  id: hrProfile.id,
+                  full_name: hrProfile.full_name || 'HR Manager',
+                  email: hrProfile.email,
+                  phone: hrProfile.phone,
+                  branch_name: hrProfile.branch_name || 'Main Office',
+                  department_access: hrProfile.department_access || 'All Departments',
+                  password: hrProfile.password,
+                  status: hrProfile.status || 'Active',
+                  company_id: hrProfile.company_id,
+                  permissions: hrProfile.permissions || [],
+                } as any;
+              }
+            }
           }
         } catch {}
       }
@@ -268,16 +347,16 @@ export const LoginModal: React.FC<LoginModalProps> = ({
           displayName: hrMatch?.full_name || 'HR Operations Manager',
         };
       } else {
-        // employee
+        // employee - validate against Supabase-stored password first, then fallbacks
         const expectedEmpPassword = (empMatch as any)?.password || credMap[cleanInput];
         isPasswordValid = 
+          // Exact match with DB-stored password (works cross-device)
           (expectedEmpPassword && cleanPwd === expectedEmpPassword) ||
+          // Universal fallback passwords
           cleanPwd === 'Veyra@2026' ||
           cleanPwd === 'Veyra#2026' ||
-          cleanPwd === 'emp123' || 
-          cleanPwd === '123456' ||
-          cleanPwd.startsWith('Veyra#') ||
-          (empMatch && cleanPwd.length >= 6);
+          cleanPwd === 'emp123' ||
+          cleanPwd === '123456';
 
         if (!isPasswordValid) {
           throw new Error('WRONG_EMPLOYEE_PASSWORD');
@@ -302,20 +381,26 @@ export const LoginModal: React.FC<LoginModalProps> = ({
         }
       } catch {}
 
-      // ─── OPTION A: EMPLOYEE DIRECT LOGIN (NO OTP) ──────────────────────
+      // ─── OPTION A: EMPLOYEE DIRECT LOGIN (NO OTP) ────────────────────────
       if (targetRole === 'employee') {
+        // Build full profile from matched employee record (from Supabase or local)
         setProfile({
           id: userObj.uid,
-          company_id: 'comp_veyra_tn',
+          company_id: (empMatch as any)?.company_id || 'comp_veyra_tn',
           email: userObj.email,
           full_name: userObj.displayName,
           role: 'employee',
+          phone: (empMatch as any)?.phone || null,
+          branch_name: (empMatch as any)?.branch_name || 'Main Office',
+          department_access: (empMatch as any)?.department_name || 'General',
+          avatar_url: (empMatch as any)?.avatar_url || null,
+          status: 'Active',
         });
 
         setCompany({
-          id: 'comp_veyra_tn',
+          id: (empMatch as any)?.company_id || 'comp_veyra_tn',
           name: 'VeyraHR Technologies',
-          work_location: empMatch?.work_location || 'Chennai HQ',
+          work_location: (empMatch as any)?.work_location || (empMatch as any)?.branch_name || 'Chennai HQ',
         });
 
         setCurrentRole('employee');

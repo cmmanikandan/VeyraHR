@@ -154,6 +154,7 @@ export const HREmployees: React.FC = () => {
         work_location: row.work_location || 'Chennai HQ',
         joining_date: row.joining_date || new Date().toISOString().split('T')[0],
         status: (row.status || 'Active') as Employee['status'],
+        password: 'Veyra@2026',
       });
     }
     setImporting(false);
