@@ -190,6 +190,7 @@ export const CreateEmployeeWizard: React.FC<CreateEmployeeWizardProps> = ({
       last_name: lastName,
       email,
       phone,
+      password: password.trim(),
       designation: effectiveDesignation || 'Operations Specialist',
       department_name: departmentName,
       branch_name: branchName,
@@ -200,6 +201,13 @@ export const CreateEmployeeWizard: React.FC<CreateEmployeeWizardProps> = ({
       status: 'Active',
       avatar_url: avatarUrl,
     });
+
+    // Save credentials to local credentials store for guaranteed login verification
+    try {
+      const creds = JSON.parse(localStorage.getItem('veyra_employee_credentials') || '{}');
+      creds[email.trim().toLowerCase()] = password.trim();
+      localStorage.setItem('veyra_employee_credentials', JSON.stringify(creds));
+    } catch {}
 
     // 3. Create user record in Supabase profiles table
     try {

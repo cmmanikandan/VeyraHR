@@ -162,6 +162,7 @@ export interface Employee {
   address?: string;
   status: 'Active' | 'Inactive' | 'On Leave';
   avatar_url?: string;
+  password?: string;
   created_at?: string;
 }
 

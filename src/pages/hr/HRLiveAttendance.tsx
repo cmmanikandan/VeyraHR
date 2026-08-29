@@ -189,7 +189,17 @@ export const HRLiveAttendance: React.FC = () => {
                     <span className="truncate max-w-[180px]">{att.check_in_location || 'Chennai HQ'}</span>
                   </td>
                   <td className="py-3.5 px-4 font-bold text-emerald-700">
-                    {Math.floor(att.working_hours_mins / 60)}h {att.working_hours_mins % 60}m
+                    {(() => {
+                      if (att.check_in_time && !att.check_out_time) {
+                        const checkInMs = new Date(att.check_in_time).getTime();
+                        const elapsedMins = Math.max(1, Math.floor((Date.now() - checkInMs) / 60000));
+                        return `${Math.floor(elapsedMins / 60)}h ${elapsedMins % 60}m (Live)`;
+                      }
+                      if (att.working_hours_mins > 0) {
+                        return `${Math.floor(att.working_hours_mins / 60)}h ${att.working_hours_mins % 60}m`;
+                      }
+                      return '0h 1m (Active)';
+                    })()}
                   </td>
                 </tr>
               ))}

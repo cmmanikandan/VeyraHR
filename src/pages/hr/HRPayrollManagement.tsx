@@ -64,8 +64,8 @@ export const HRPayrollManagement: React.FC = () => {
     const totalWorkingDays = 22;
 
     return employees.map((emp, idx) => {
-      const empAttendance = attendance.filter((a) => a.employee_id === emp.id && a.status === 'Present');
-      const daysPresent = Math.min(totalWorkingDays, Math.max(1, empAttendance.length || 20));
+      const empAttendance = attendance.filter((a) => a.employee_id === emp.id && (a.status === 'Present' || a.status === 'Late' || !!a.check_in_time));
+      const daysPresent = empAttendance.length;
 
       // Tiered base salary estimation
       const baseSalary = 50000 + (idx % 4) * 15000;
