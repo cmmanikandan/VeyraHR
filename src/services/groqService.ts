@@ -17,8 +17,9 @@ export const callGroqChat = async (
   messages: GroqChatMessage[],
   options: { model?: string; temperature?: number; max_tokens?: number } = {}
 ): Promise<string> => {
+  const primaryModel = options.model || GROQ_CHAT_MODEL;
+  
   try {
-    const model = options.model || GROQ_CHAT_MODEL;
     const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
       method: 'POST',
       headers: {
@@ -26,23 +27,46 @@ export const callGroqChat = async (
         Authorization: `Bearer ${GROQ_API_KEY}`,
       },
       body: JSON.stringify({
-        model,
+        model: primaryModel,
         messages,
         temperature: options.temperature ?? 0.2,
         max_tokens: options.max_tokens ?? 1024,
       }),
     });
 
-    if (!response.ok) {
-      const errJson = await response.json().catch(() => ({}));
-      throw new Error(errJson.error?.message || `Groq API Error: ${response.statusText}`);
+    if (response.ok) {
+      const data = await response.json();
+      return data.choices?.[0]?.message?.content || '';
     }
+  } catch (primaryErr) {
+    console.warn('Groq primary model attempt notice:', primaryErr);
+  }
 
-    const data = await response.json();
-    return data.choices?.[0]?.message?.content || '';
-  } catch (error: any) {
-    console.error('Groq AI API Call Error:', error);
-    throw error;
+  // Fallback to ultra-fast 8B model if 70B encounters rate limits or network issues
+  try {
+    const fallbackResponse = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${GROQ_API_KEY}`,
+      },
+      body: JSON.stringify({
+        model: GROQ_FAST_MODEL,
+        messages,
+        temperature: options.temperature ?? 0.2,
+        max_tokens: options.max_tokens ?? 512,
+      }),
+    });
+
+    if (fallbackResponse.ok) {
+      const fallbackData = await fallbackResponse.json();
+      return fallbackData.choices?.[0]?.message?.content || '';
+    }
+    const errJson = await fallbackResponse.json().catch(() => ({}));
+    throw new Error(errJson.error?.message || `Groq API Error: ${fallbackResponse.statusText}`);
+  } catch (finalErr: any) {
+    console.error('Groq AI API Call Final Error:', finalErr);
+    throw finalErr;
   }
 };
 
