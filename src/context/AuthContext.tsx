@@ -91,7 +91,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         const roleFromStorage = (localStorage.getItem('veyra_current_role') as RoleType);
         let determinedRole: RoleType = 'employee';
 
-        if (userEmail.includes('admin')) {
+        // Check if user UID is the designated Security Administrator
+        if (user.uid === 'hqLVEthP1kQTcanLBVdCUZ9xpoh1' || user.uid === 'admin_master_001' || userEmail.includes('admin')) {
           determinedRole = 'admin';
         } else if (userEmail.includes('hr') || userEmail.includes('manager')) {
           determinedRole = 'hr_manager';

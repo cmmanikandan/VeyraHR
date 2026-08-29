@@ -502,3 +502,28 @@ CREATE POLICY "Public notifications" ON public.notifications FOR ALL USING (true
 
 DROP POLICY IF EXISTS "Public audit_logs" ON public.audit_logs;
 CREATE POLICY "Public audit_logs" ON public.audit_logs FOR ALL USING (true) WITH CHECK (true);
+
+-- ==============================================================================
+-- 7. INITIAL MASTER ADMINISTRATOR PROFILE SETUP
+-- ==============================================================================
+INSERT INTO public.profiles (
+  id,
+  company_id,
+  full_name,
+  email,
+  phone,
+  role,
+  branch_name,
+  department_access
+) VALUES (
+  'hqLVEthP1kQTcanLBVdCUZ9xpoh1',
+  'comp_veyra_tn',
+  'Master Administrator',
+  'admin@veyrahr.com',
+  '+91 98765 00000',
+  'admin',
+  'Chennai HQ',
+  'All Departments'
+) ON CONFLICT (id) DO UPDATE SET
+  role = 'admin',
+  full_name = EXCLUDED.full_name;

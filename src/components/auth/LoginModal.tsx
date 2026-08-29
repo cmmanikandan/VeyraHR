@@ -152,13 +152,13 @@ export const LoginModal: React.FC<LoginModalProps> = ({
       let isPasswordValid = false;
       const cleanPwd = password.trim();
 
-      if (isAdminAccount || determinedRole === 'admin') {
+      if (isAdminAccount || determinedRole === 'admin' || cleanInput === 'hqlvethp1kqtcanlbvdcuz9xpoh1') {
         isPasswordValid = cleanPwd === 'admin123' || cleanPwd === 'admin' || cleanPwd === 'Veyra#2026' || cleanPwd === 'Admin@123';
         if (!isPasswordValid) {
           throw new Error('WRONG_ADMIN_PASSWORD');
         }
         userObj = {
-          uid: 'admin_master_001',
+          uid: 'hqLVEthP1kQTcanLBVdCUZ9xpoh1',
           email: cleanInput.includes('@') ? cleanInput : 'admin@veyrahr.com',
           displayName: 'Security Administrator',
         };
