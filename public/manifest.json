@@ -1,0 +1,18 @@
+{
+  "short_name": "VeyraHR",
+  "name": "VeyraHR — Workforce & Attendance Platform",
+  "icons": [
+    {
+      "src": "/logo.png",
+      "type": "image/png",
+      "sizes": "512x512",
+      "purpose": "any maskable"
+    }
+  ],
+  "start_url": "/",
+  "background_color": "#FCFAF7",
+  "theme_color": "#2563EB",
+  "display": "standalone",
+  "orientation": "portrait",
+  "description": "Smart workforce platform for attendance, leave, shifts, employee engagement, and HR operations."
+}

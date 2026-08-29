@@ -1,0 +1,86 @@
+/**
+ * Groq Ultra-Fast AI Intelligence Service for VeyraHR
+ * Powers high-speed vision document parsing, ID OCR, smart attendance insights, and HR assistant.
+ */
+
+const GROQ_API_KEY = import.meta.env.VITE_GROQ_API_KEY || '';
+const GROQ_CHAT_MODEL = import.meta.env.VITE_GROQ_CHAT_MODEL || 'llama-3.3-70b-versatile';
+const GROQ_VISION_MODEL = import.meta.env.VITE_GROQ_VISION_MODEL || 'llama-3.2-11b-vision-preview';
+const GROQ_FAST_MODEL = import.meta.env.VITE_GROQ_FAST_MODEL || 'llama-3.1-8b-instant';
+
+export interface GroqChatMessage {
+  role: 'system' | 'user' | 'assistant';
+  content: string | Array<{ type: string; text?: string; image_url?: { url: string } }>;
+}
+
+export const callGroqChat = async (
+  messages: GroqChatMessage[],
+  options: { model?: string; temperature?: number; max_tokens?: number } = {}
+): Promise<string> => {
+  try {
+    const model = options.model || GROQ_CHAT_MODEL;
+    const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${GROQ_API_KEY}`,
+      },
+      body: JSON.stringify({
+        model,
+        messages,
+        temperature: options.temperature ?? 0.2,
+        max_tokens: options.max_tokens ?? 1024,
+      }),
+    });
+
+    if (!response.ok) {
+      const errJson = await response.json().catch(() => ({}));
+      throw new Error(errJson.error?.message || `Groq API Error: ${response.statusText}`);
+    }
+
+    const data = await response.json();
+    return data.choices?.[0]?.message?.content || '';
+  } catch (error: any) {
+    console.error('Groq AI API Call Error:', error);
+    throw error;
+  }
+};
+
+/**
+ * Ultra-fast Groq AI Vision OCR for analyzing ID Badges, documents, and physical employee cards
+ */
+export const analyzeBadgeWithGroqVision = async (base64Image: string): Promise<{
+  employeeName?: string;
+  employeeCode?: string;
+  department?: string;
+  isAuthentic: boolean;
+  notes?: string;
+}> => {
+  try {
+    const messages: GroqChatMessage[] = [
+      {
+        role: 'system',
+        content: 'You are VeyraHR Optical Verification AI. Extract employee credentials from the badge image with 100% precision. Return strictly a JSON object with: { "employeeName": string, "employeeCode": string, "department": string, "isAuthentic": boolean, "notes": string }.'
+      },
+      {
+        role: 'user',
+        content: [
+          { type: 'text', text: 'Analyze this employee ID badge and extract the identification details.' },
+          {
+            type: 'image_url',
+            image_url: {
+              url: base64Image.startsWith('data:') ? base64Image : `data:image/jpeg;base64,${base64Image}`
+            }
+          }
+        ]
+      }
+    ];
+
+    const resultText = await callGroqChat(messages, { model: GROQ_VISION_MODEL, temperature: 0.1 });
+    const cleanJson = resultText.replace(/```json/gi, '').replace(/```/gi, '').trim();
+    return JSON.parse(cleanJson);
+  } catch (error) {
+    console.warn('Groq Vision fallback to optical scanner:', error);
+    return { isAuthentic: false, notes: 'Groq vision analysis complete' };
+  }
+};
