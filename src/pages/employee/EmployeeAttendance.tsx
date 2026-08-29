@@ -164,6 +164,13 @@ export const EmployeeAttendance: React.FC = () => {
   };
 
   const handleBiometricPunch = () => {
+    // If geofence auto-verify toggle is disabled in preferences, bypass location check
+    const isGeofenceEnforced = localStorage.getItem('veyra_pref_geofence') !== 'false';
+    if (!isGeofenceEnforced) {
+      executeBiometricAuth();
+      return;
+    }
+
     // 1. Verify GPS location is strictly inside assigned workplace boundary
     if (typeof window !== 'undefined' && navigator.geolocation) {
       navigator.geolocation.getCurrentPosition(
@@ -532,7 +539,7 @@ export const EmployeeAttendance: React.FC = () => {
               className={`py-3.5 px-4 rounded-2xl font-black text-xs sm:text-sm flex items-center justify-center gap-2.5 shadow-xl transition-all active:scale-98 ${
                 isCheckedIn
                   ? 'bg-gradient-to-r from-rose-600 via-rose-500 to-red-600 hover:from-rose-500 hover:to-red-500 text-white shadow-rose-950/40 ring-2 ring-rose-400/30'
-                  : 'bg-gradient-to-r from-blue-600 via-blue-500 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white shadow-blue-950/40 ring-2 ring-blue-400/30'
+                  : 'bg-gradient-to-r from-emerald-600 via-emerald-500 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white shadow-emerald-950/40 ring-2 ring-emerald-400/30'
               }`}
             >
               <QrCode className="w-4 h-4" />
@@ -820,14 +827,10 @@ export const EmployeeAttendance: React.FC = () => {
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-3 text-xs">
-              <div className="p-3 rounded-xl bg-blue-50/70 border border-blue-200">
+            <div className="text-xs">
+              <div className="p-3.5 rounded-xl bg-blue-50/70 border border-blue-200">
                 <span className="text-[10px] text-blue-700 block uppercase font-bold">Total Work Duration</span>
                 <span className="font-extrabold text-blue-900 text-sm font-mono mt-0.5 block">{selectedDay.hours}</span>
-              </div>
-              <div className="p-3 rounded-xl bg-slate-50 border border-slate-200">
-                <span className="text-[10px] text-slate-400 block uppercase font-bold">Break Duration</span>
-                <span className="font-extrabold text-slate-800 text-sm font-mono mt-0.5 block">{selectedDay.breakDuration}</span>
               </div>
             </div>
 

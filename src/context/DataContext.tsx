@@ -706,6 +706,33 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const currentMin = new Date().getMinutes();
     const isLate = currentHour > 9 || (currentHour === 9 && currentMin > 15);
 
+    const existing = attendance.find((a) => a.employee_id === employeeId && a.date === todayStr);
+
+    if (existing) {
+      const updatedRecord: AttendanceRecord = {
+        ...existing,
+        check_in_time: existing.check_in_time || nowIso,
+        check_out_time: undefined,
+        check_in_location: location,
+        verification_method: method,
+        working_hours_mins: 0,
+      };
+
+      try {
+        await supabase.from('attendance').upsert(updatedRecord);
+      } catch (e) {
+        console.warn('Check-in upsert sync:', e);
+      }
+
+      setAttendance((prev) => {
+        const updated = [updatedRecord, ...prev.filter((a) => a.id !== existing.id)];
+        try { localStorage.setItem('veyra_attendance', JSON.stringify(updated)); } catch {}
+        return updated;
+      });
+
+      return updatedRecord;
+    }
+
     const newRecord: AttendanceRecord = {
       id: `att_${Date.now()}`,
       employee_id: employeeId,
@@ -873,29 +900,23 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const logMood = async (employeeId: string, mood: MoodLog['mood'], note?: string) => {
     const todayStr = new Date().toISOString().split('T')[0];
-    const isMorning = note?.includes('Morning') || (!note?.includes('Evening') && new Date().getHours() < 13);
-    const sessionTag = isMorning ? 'Morning' : 'Evening';
     const newMood: MoodLog = {
       id: `m_${Date.now()}`,
       employee_id: employeeId,
       company_id: 'comp_veyra_tn',
       date: todayStr,
       mood,
-      note: note || `${sessionTag} Pulse: Feeling ${mood}`,
+      note: note || `Pulse: Feeling ${mood}`,
       created_at: new Date().toISOString(),
     };
     // Persist to Supabase
     try {
-      await supabase.from('mood_logs').insert(newMood);
+      await supabase.from('mood_logs').upsert(newMood);
     } catch (e) { console.warn('Mood log sync:', e); }
 
     setMoodLogs((prev) => {
       const filtered = prev.filter(
-        (m) => !(m.employee_id === employeeId && m.date === todayStr && (
-          isMorning 
-            ? (m.note?.includes('Morning') || (new Date(m.created_at || '').getHours() < 13 && !m.note?.includes('Evening')))
-            : (m.note?.includes('Evening') || (new Date(m.created_at || '').getHours() >= 13 && !m.note?.includes('Morning')))
-        ))
+        (m) => !(m.employee_id === employeeId && m.date === todayStr)
       );
       const updated = [newMood, ...filtered];
       try { localStorage.setItem('veyra_mood_logs', JSON.stringify(updated)); } catch {}

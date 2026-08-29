@@ -260,7 +260,11 @@ export const DynamicQRScanner: React.FC<DynamicQRScannerProps> = ({
     }
 
     // Geolocation boundary verification
-    if (navigator.geolocation) {
+    const isGeofenceEnforced = localStorage.getItem('veyra_pref_geofence') !== 'false';
+    if (!isGeofenceEnforced) {
+      setGeofenceViolation(false);
+      setLocationText('Chennai HQ (Geofence Disabled)');
+    } else if (navigator.geolocation) {
       navigator.geolocation.getCurrentPosition(
         (pos) => {
           const lat = pos.coords.latitude;
