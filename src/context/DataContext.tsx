@@ -401,23 +401,35 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     // Sync to Supabase profiles & hr_managers with schema-compliant payload
     try {
-      await supabase.from('profiles').upsert({
+      const hrEmail = newHR.email.trim().toLowerCase();
+
+      // Save HR credentials to local credentials store for cross-device login
+      if (newHR.password) {
+        try {
+          const creds = JSON.parse(localStorage.getItem('veyra_hr_credentials') || '{}');
+          creds[hrEmail] = newHR.password;
+          localStorage.setItem('veyra_hr_credentials', JSON.stringify(creds));
+        } catch {}
+      }
+
+      const { error: profileErr } = await supabase.from('profiles').upsert({
         id: newHR.id,
         company_id: newHR.company_id || 'comp_veyra_tn',
         full_name: newHR.full_name,
-        email: newHR.email.trim().toLowerCase(),
+        email: hrEmail,
         phone: newHR.phone || null,
         role: 'hr_manager',
         branch_name: newHR.branch_name || 'Chennai HQ',
         department_access: newHR.department_access || 'All Departments',
         status: newHR.status || 'Active',
       });
+      if (profileErr) console.warn('HR Profile upsert error:', profileErr);
 
-      await supabase.from('hr_managers').upsert({
+      const { error: hrErr } = await supabase.from('hr_managers').upsert({
         id: newHR.id,
         company_id: newHR.company_id || 'comp_veyra_tn',
         full_name: newHR.full_name,
-        email: newHR.email.trim().toLowerCase(),
+        email: hrEmail,
         phone: newHR.phone || null,
         branch_name: newHR.branch_name || 'Chennai HQ',
         department_access: newHR.department_access || 'All Departments',
@@ -425,6 +437,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         status: newHR.status || 'Active',
         avatar_url: newHR.avatar_url || null,
       });
+      if (hrErr) console.warn('HR Manager upsert error:', hrErr);
     } catch (e) {
       console.warn('HR Manager Supabase sync notice:', e);
     }

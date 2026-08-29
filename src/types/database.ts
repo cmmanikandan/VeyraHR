@@ -85,6 +85,7 @@ export interface HRManager {
   status: 'Active' | 'Inactive' | 'Pending';
   last_login?: string;
   avatar_url?: string;
+  password?: string;
   created_at: string;
 }
 

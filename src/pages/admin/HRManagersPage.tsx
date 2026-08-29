@@ -77,9 +77,9 @@ export const HRManagersPage: React.FC = () => {
         department_access: deptAccess,
         permissions,
         status: 'Active',
+        password: password.trim(),
         last_login: 'Never',
         avatar_url: `https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80`,
-        ...({ password: password.trim() } as any),
       });
 
       // Reset form
