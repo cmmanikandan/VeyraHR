@@ -24,6 +24,7 @@ import { auth } from '../../lib/firebase';
 import { RoleType } from '../../types/database';
 import { VeyraBrandHeader } from '../common/VeyraBrandHeader';
 import { sendSecurityOtpEmail } from '../../lib/emailService';
+import { supabase } from '../../lib/supabase';
 
 interface LoginModalProps {
   isOpen: boolean;
@@ -138,26 +139,41 @@ export const LoginModal: React.FC<LoginModalProps> = ({
                  emp.id?.toLowerCase() === cleanInput
       );
 
-      // Check localStorage if not yet synced in memory
+      // Check live Supabase Database if not found locally
       if (!empMatch) {
         try {
-          const savedEmps = JSON.parse(localStorage.getItem('veyra_employees') || '[]');
-          if (Array.isArray(savedEmps)) {
-            empMatch = savedEmps.find(
-              (emp: any) => emp.email?.toLowerCase() === cleanInput || 
-                            emp.employee_id?.toLowerCase() === cleanInput ||
-                            emp.id?.toLowerCase() === cleanInput
-            );
+          const { data: dbEmp } = await supabase
+            .from('employees')
+            .select('*')
+            .or(`email.ilike.${cleanInput},employee_id.ilike.${cleanInput},id.eq.${cleanInput}`)
+            .maybeSingle();
+          if (dbEmp) {
+            empMatch = dbEmp;
           }
         } catch {}
       }
 
-      const hrMatch = hrManagers.find(
+      let hrMatch = hrManagers.find(
         (h) => h.email?.toLowerCase() === cleanInput || 
                (h as any).employee_code?.toLowerCase() === cleanInput || 
                (h as any).id?.toLowerCase() === cleanInput ||
                (h as any).phone === cleanInput
       );
+
+      // Check HR Manager in Supabase if not found locally
+      if (!hrMatch) {
+        try {
+          const { data: dbHr } = await supabase
+            .from('hr_managers')
+            .select('*')
+            .or(`email.ilike.${cleanInput},id.eq.${cleanInput}`)
+            .maybeSingle();
+          if (dbHr) {
+            hrMatch = dbHr;
+          }
+        } catch {}
+      }
+
       const isAdminAccount = 
         cleanInput.includes('admin') || 
         cleanInput === 'adm001' || 

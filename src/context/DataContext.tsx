@@ -283,73 +283,93 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const refreshData = useCallback(async () => {
     try {
-      // Employees
-      const { data: empData, error: empErr } = await supabase.from('employees').select('*').order('created_at', { ascending: false });
-      if (!empErr && empData && empData.length > 0) {
+      // 1. Employees
+      const { data: empData, error: empErr } = await supabase
+        .from('employees')
+        .select('*')
+        .order('created_at', { ascending: false });
+      if (!empErr && empData) {
         setEmployees(empData);
         try { localStorage.setItem('veyra_employees', JSON.stringify(empData)); } catch {}
       }
 
-      // Attendance
-      const { data: attData, error: attErr } = await supabase.from('attendance').select('*').order('created_at', { ascending: false });
-      if (!attErr && attData && attData.length > 0) {
-        setAttendance(attData);
-        try { localStorage.setItem('veyra_attendance', JSON.stringify(attData)); } catch {}
-      }
-
-      // Leave Requests
-      const { data: leaveData, error: leaveErr } = await supabase.from('leave_requests').select('*').order('created_at', { ascending: false });
-      if (!leaveErr && leaveData && leaveData.length > 0) {
-        setLeaveRequests(leaveData);
-        try { localStorage.setItem('veyra_leaves', JSON.stringify(leaveData)); } catch {}
-      }
-
-      // Mood Logs
-      const { data: moodData, error: moodErr } = await supabase.from('mood_logs').select('*').order('created_at', { ascending: false });
-      if (!moodErr && moodData && moodData.length > 0) {
-        setMoodLogs(moodData);
-        try { localStorage.setItem('veyra_mood_logs', JSON.stringify(moodData)); } catch {}
-      }
-
-      // Announcements
-      const { data: annData, error: annErr } = await supabase.from('announcements').select('*').order('created_at', { ascending: false });
-      if (!annErr && annData && annData.length > 0) {
-        setAnnouncements(annData);
-        try { localStorage.setItem('veyra_announcements', JSON.stringify(annData)); } catch {}
-      }
-
-      // Shifts
-      const { data: shiftData } = await supabase.from('shifts').select('*');
-      if (shiftData && shiftData.length > 0) setShifts(shiftData);
-
-      // Shift Swaps
-      const { data: swapData } = await supabase.from('shift_swap_requests').select('*').order('created_at', { ascending: false });
-      if (swapData && swapData.length > 0) setShiftSwaps(swapData);
-
-      // Attendance Corrections
-      const { data: corrData } = await supabase.from('attendance_corrections').select('*').order('created_at', { ascending: false });
-      if (corrData && corrData.length > 0) setCorrections(corrData);
-
-      // Branches
-      const { data: branchData } = await supabase.from('branches').select('*');
-      if (branchData && branchData.length > 0) setBranches(branchData);
-
-      // Departments
-      const { data: deptData } = await supabase.from('departments').select('*');
-      if (deptData && deptData.length > 0) setDepartments(deptData);
-
-      // HR Managers
-      const { data: hrData, error: hrErr } = await supabase.from('hr_managers').select('*');
-      if (!hrErr && hrData && hrData.length > 0) {
+      // 2. HR Managers
+      const { data: hrData, error: hrErr } = await supabase
+        .from('hr_managers')
+        .select('*')
+        .order('created_at', { ascending: false });
+      if (!hrErr && hrData) {
         setHrManagers(hrData);
         try { localStorage.setItem('veyra_hr_managers', JSON.stringify(hrData)); } catch {}
       }
 
-      // Company Holidays
-      const { data: holData } = await supabase.from('company_holidays').select('*').order('holiday_date', { ascending: true });
-      if (holData && holData.length > 0) setCompanyHolidays(holData);
+      // 3. Attendance Records
+      const { data: attData, error: attErr } = await supabase
+        .from('attendance')
+        .select('*')
+        .order('created_at', { ascending: false });
+      if (!attErr && attData) {
+        setAttendance(attData);
+        try { localStorage.setItem('veyra_attendance', JSON.stringify(attData)); } catch {}
+      }
 
-      // Leave Balances
+      // 4. Leave Requests
+      const { data: leaveData, error: leaveErr } = await supabase
+        .from('leave_requests')
+        .select('*')
+        .order('created_at', { ascending: false });
+      if (!leaveErr && leaveData) {
+        setLeaveRequests(leaveData);
+        try { localStorage.setItem('veyra_leaves', JSON.stringify(leaveData)); } catch {}
+      }
+
+      // 5. Mood Pulse Logs
+      const { data: moodData, error: moodErr } = await supabase
+        .from('mood_logs')
+        .select('*')
+        .order('created_at', { ascending: false });
+      if (!moodErr && moodData) {
+        setMoodLogs(moodData);
+        try { localStorage.setItem('veyra_mood_logs', JSON.stringify(moodData)); } catch {}
+      }
+
+      // 6. Announcements
+      const { data: annData, error: annErr } = await supabase
+        .from('announcements')
+        .select('*')
+        .order('created_at', { ascending: false });
+      if (!annErr && annData) {
+        setAnnouncements(annData);
+        try { localStorage.setItem('veyra_announcements', JSON.stringify(annData)); } catch {}
+      }
+
+      // 7. Shifts
+      const { data: shiftData, error: shiftErr } = await supabase.from('shifts').select('*');
+      if (!shiftErr && shiftData && shiftData.length > 0) setShifts(shiftData);
+
+      // 8. Shift Swaps
+      const { data: swapData } = await supabase
+        .from('shift_swap_requests')
+        .select('*')
+        .order('created_at', { ascending: false });
+      if (swapData) setShiftSwaps(swapData);
+
+      // 9. Attendance Corrections
+      const { data: corrData } = await supabase
+        .from('attendance_corrections')
+        .select('*')
+        .order('created_at', { ascending: false });
+      if (corrData) setCorrections(corrData);
+
+      // 10. Branches
+      const { data: branchData } = await supabase.from('branches').select('*');
+      if (branchData && branchData.length > 0) setBranches(branchData);
+
+      // 11. Departments
+      const { data: deptData } = await supabase.from('departments').select('*');
+      if (deptData && deptData.length > 0) setDepartments(deptData);
+
+      // 12. Leave Balances
       const { data: balData } = await supabase.from('leave_balances').select('*');
       if (balData && balData.length > 0) setLeaveBalances(balData);
     } catch (err) {
@@ -379,20 +399,32 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       return updated;
     });
 
-    // Sync to Supabase profiles & hr_managers
+    // Sync to Supabase profiles & hr_managers with schema-compliant payload
     try {
       await supabase.from('profiles').upsert({
         id: newHR.id,
         company_id: newHR.company_id || 'comp_veyra_tn',
         full_name: newHR.full_name,
-        email: newHR.email,
-        phone: newHR.phone,
+        email: newHR.email.trim().toLowerCase(),
+        phone: newHR.phone || null,
         role: 'hr_manager',
-        branch_name: newHR.branch_name,
-        department_access: newHR.department_access,
+        branch_name: newHR.branch_name || 'Chennai HQ',
+        department_access: newHR.department_access || 'All Departments',
         status: newHR.status || 'Active',
       });
-      await supabase.from('hr_managers').upsert(newHR);
+
+      await supabase.from('hr_managers').upsert({
+        id: newHR.id,
+        company_id: newHR.company_id || 'comp_veyra_tn',
+        full_name: newHR.full_name,
+        email: newHR.email.trim().toLowerCase(),
+        phone: newHR.phone || null,
+        branch_name: newHR.branch_name || 'Chennai HQ',
+        department_access: newHR.department_access || 'All Departments',
+        permissions: newHR.permissions || ['Employees', 'Attendance', 'Leaves', 'Shifts', 'Announcements', 'Reports'],
+        status: newHR.status || 'Active',
+        avatar_url: newHR.avatar_url || null,
+      });
     } catch (e) {
       console.warn('HR Manager Supabase sync notice:', e);
     }
@@ -474,14 +506,44 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       return updated;
     });
 
-    // 2. Persist to Supabase Database
+    // 2. Persist to Supabase Database (sanitized SQL payload)
     try {
-      const { error } = await supabase.from('employees').insert(newEmp);
-      if (error) {
-        console.warn('Supabase employee insertion notice:', error);
-      }
+      const dbEmpPayload = {
+        id: newEmp.id,
+        profile_id: newEmp.profile_id || null,
+        company_id: newEmp.company_id || 'comp_veyra_tn',
+        employee_id: newEmp.employee_id,
+        first_name: newEmp.first_name,
+        last_name: newEmp.last_name,
+        email: newEmp.email.trim().toLowerCase(),
+        phone: newEmp.phone || null,
+        department_name: newEmp.department_name || 'Engineering & Tech',
+        branch_name: newEmp.branch_name || 'Chennai HQ',
+        designation: newEmp.designation,
+        joining_date: newEmp.joining_date,
+        work_location: newEmp.work_location,
+        emergency_contact: newEmp.emergency_contact || null,
+        address: newEmp.address || null,
+        status: newEmp.status || 'Active',
+        avatar_url: newEmp.avatar_url || null,
+      };
+
+      await supabase.from('employees').upsert(dbEmpPayload);
+
+      await supabase.from('profiles').upsert({
+        id: newEmp.id,
+        company_id: newEmp.company_id || 'comp_veyra_tn',
+        email: newEmp.email.trim().toLowerCase(),
+        full_name: `${newEmp.first_name} ${newEmp.last_name}`,
+        role: 'employee',
+        phone: newEmp.phone || null,
+        branch_name: newEmp.branch_name || 'Chennai HQ',
+        department_access: newEmp.department_name || 'Engineering & Tech',
+        avatar_url: newEmp.avatar_url,
+        status: newEmp.status || 'Active',
+      });
     } catch (e) {
-      console.warn('Supabase insertion error:', e);
+      console.warn('Supabase insertion notice:', e);
     }
 
     setAuditLogs((prev) => [
@@ -501,6 +563,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const deleteEmployee = async (id: string) => {
     try {
+      await supabase.from('profiles').delete().eq('id', id);
       await supabase.from('employees').delete().eq('id', id);
     } catch (e) {
       console.warn('Employee delete sync:', e);
@@ -550,6 +613,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       try { localStorage.setItem('veyra_attendance', JSON.stringify(updated)); } catch {}
       return updated;
     });
+
     return newRecord;
   };
 
