@@ -8,12 +8,14 @@ import {
   WifiOff,
   IdCard,
   Sun,
-  Moon
+  Moon,
+  Bot
 } from 'lucide-react';
 import { clsx } from 'clsx';
 import { useAuth } from '../../context/AuthContext';
 import { useData } from '../../context/DataContext';
 import { DigitalIDCardModal } from '../employee/DigitalIDCardModal';
+import { AIHelpdeskModal } from '../employee/AIHelpdeskModal';
 import { Employee } from '../../types/database';
 
 export type EmployeeTabType = 'home' | 'attendance' | 'leave' | 'notifications' | 'profile' | 'documents' | 'payslips' | 'helpdesk';
@@ -39,6 +41,7 @@ export const EmployeeLayout: React.FC<EmployeeLayoutProps> = ({
   const { profile } = useAuth();
   const { notifications, employees, isOffline, offlineQueueLength } = useData();
   const [isIdCardOpen, setIsIdCardOpen] = useState(false);
+  const [isHelpdeskOpen, setIsHelpdeskOpen] = useState(false);
   const [currentTime, setCurrentTime] = useState<string>('');
   const [currentDate, setCurrentDate] = useState<string>('');
 
@@ -313,12 +316,30 @@ export const EmployeeLayout: React.FC<EmployeeLayoutProps> = ({
         </div>
       </nav>
 
+      {/* Floating AI Assistant Trigger Button */}
+      <button
+        onClick={() => setIsHelpdeskOpen(true)}
+        className="fixed bottom-24 right-4 z-40 p-3.5 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-full shadow-2xl hover:scale-105 transition-all flex items-center gap-2 border-2 border-white/40 group"
+        title="Ask VeyraHR AI Assistant"
+      >
+        <Bot className="w-5 h-5 animate-pulse text-cyan-300" />
+        <span className="text-xs font-black hidden sm:inline pr-1">Ask AI</span>
+      </button>
+
       {/* Digital ID Card Modal */}
       {isIdCardOpen && (
         <DigitalIDCardModal
           isOpen={isIdCardOpen}
           onClose={() => setIsIdCardOpen(false)}
           employee={currentEmp}
+        />
+      )}
+
+      {/* AI Helpdesk Modal */}
+      {isHelpdeskOpen && (
+        <AIHelpdeskModal
+          isOpen={isHelpdeskOpen}
+          onClose={() => setIsHelpdeskOpen(false)}
         />
       )}
     </div>
