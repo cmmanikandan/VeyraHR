@@ -77,380 +77,54 @@ interface DataContextType {
 
 const DataContext = createContext<DataContextType | undefined>(undefined);
 
-const DEFAULT_EMPLOYEES: Employee[] = [
-  {
-    id: 'emp_001',
-    company_id: 'comp_veyra_tn',
-    employee_id: 'VEY-EMP-0001',
-    first_name: 'Anjali',
-    last_name: 'Sharma',
-    email: 'anjali.sharma@veyrahr.com',
-    designation: 'Senior Full Stack Engineer',
-    department_name: 'Engineering & Tech',
-    branch_name: 'Chennai HQ',
-    work_location: 'Chennai HQ, Tamil Nadu',
-    phone: '+91 98765 43210',
-    joining_date: '2024-03-01',
-    status: 'Active',
-    emergency_contact: '+91 98765 00001 (Father)',
-    address: 'Flat 4B, Emerald Heights, Anna Nagar, Chennai',
-    avatar_url: 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=150&auto=format&fit=crop&q=80',
-    created_at: '2024-03-01T09:00:00.000Z',
-  },
-  {
-    id: 'emp_002',
-    company_id: 'comp_veyra_tn',
-    employee_id: 'VEY-EMP-0002',
-    first_name: 'Ravi',
-    last_name: 'Kumar',
-    email: 'ravi.kumar@veyrahr.com',
-    designation: 'HR Operations Executive',
-    department_name: 'Human Resources',
-    branch_name: 'Coimbatore Branch',
-    work_location: 'Coimbatore Branch, Tamil Nadu',
-    phone: '+91 91234 56789',
-    joining_date: '2024-05-15',
-    status: 'Active',
-    emergency_contact: '+91 91234 00002 (Spouse)',
-    address: '12, Cross Cut Road, Gandhipuram, Coimbatore',
-    avatar_url: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&auto=format&fit=crop&q=80',
-    created_at: '2024-05-15T09:00:00.000Z',
-  },
-  {
-    id: 'emp_003',
-    company_id: 'comp_veyra_tn',
-    employee_id: 'VEY-EMP-0003',
-    first_name: 'Priya',
-    last_name: 'Nair',
-    email: 'priya.nair@veyrahr.com',
-    designation: 'Sales & Growth Lead',
-    department_name: 'Sales & Marketing',
-    branch_name: 'Madurai Regional Hub',
-    work_location: 'Madurai Regional Hub, Tamil Nadu',
-    phone: '+91 99887 76655',
-    joining_date: '2023-11-20',
-    status: 'Active',
-    emergency_contact: '+91 99887 00003 (Brother)',
-    address: '88, KK Nagar East, Madurai',
-    avatar_url: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80',
-    created_at: '2023-11-20T09:00:00.000Z',
-  },
-  {
-    id: 'emp_004',
-    company_id: 'comp_veyra_tn',
-    employee_id: 'VEY-EMP-0004',
-    first_name: 'Karthik',
-    last_name: 'Raja',
-    email: 'karthik.raja@veyrahr.com',
-    designation: 'DevOps & Cloud Architect',
-    department_name: 'Engineering & Tech',
-    branch_name: 'Chennai HQ',
-    work_location: 'Chennai HQ, Tamil Nadu',
-    phone: '+91 97112 23344',
-    joining_date: '2024-01-10',
-    status: 'Active',
-    emergency_contact: '+91 97112 00004 (Mother)',
-    address: 'Plot 21, OMR IT Highway, Sholinganallur, Chennai',
-    avatar_url: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=150&auto=format&fit=crop&q=80',
-    created_at: '2024-01-10T09:00:00.000Z',
-  },
-  {
-    id: 'emp_005',
-    company_id: 'comp_veyra_tn',
-    employee_id: 'VEY-EMP-0005',
-    first_name: 'Divya',
-    last_name: 'Prakash',
-    email: 'divya.prakash@veyrahr.com',
-    designation: 'Senior Financial Analyst',
-    department_name: 'Finance & Operations',
-    branch_name: 'Karur Office',
-    work_location: 'Karur Office, Tamil Nadu',
-    phone: '+91 94433 22110',
-    joining_date: '2024-02-01',
-    status: 'On Leave',
-    emergency_contact: '+91 94433 00005 (Father)',
-    address: '45, Thanthonimalai Bye-pass, Karur',
-    avatar_url: 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=150&auto=format&fit=crop&q=80',
-    created_at: '2024-02-01T09:00:00.000Z',
-  },
-  {
-    id: 'emp_006',
-    company_id: 'comp_veyra_tn',
-    employee_id: 'VEY-EMP-0006',
-    first_name: 'Suresh',
-    last_name: 'Babu',
-    email: 'suresh.babu@veyrahr.com',
-    designation: 'Customer Success Specialist',
-    department_name: 'Customer Support',
-    branch_name: 'Chennai HQ',
-    work_location: 'Chennai HQ, Tamil Nadu',
-    phone: '+91 98401 55667',
-    joining_date: '2023-09-01',
-    status: 'Active',
-    emergency_contact: '+91 98401 00006 (Spouse)',
-    address: '15, Guindy Industrial Estate, Chennai',
-    avatar_url: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=150&auto=format&fit=crop&q=80',
-    created_at: '2023-09-01T09:00:00.000Z',
-  },
-  {
-    id: 'emp_007',
-    company_id: 'comp_veyra_tn',
-    employee_id: 'VEY-EMP-0007',
-    first_name: 'Kamalesh',
-    last_name: 'Selvan',
-    email: 'kamalesh.selvan@veyrahr.com',
-    designation: 'UI/UX Product Designer',
-    department_name: 'Product & Design',
-    branch_name: 'Chennai HQ',
-    work_location: 'Chennai HQ, Tamil Nadu',
-    phone: '+91 98844 12345',
-    joining_date: '2024-02-15',
-    status: 'Active',
-    emergency_contact: '+91 98844 00007 (Brother)',
-    address: '28, Gandhi Street, T. Nagar, Chennai',
-    avatar_url: 'https://images.unsplash.com/photo-1539571696357-5a69c17a67c6?w=150&auto=format&fit=crop&q=80',
-    created_at: '2024-02-15T09:00:00.000Z',
-  },
-];
-
-const DEFAULT_HR_MANAGERS: HRManager[] = [
-  {
-    id: 'hr_001',
-    company_id: 'comp_veyra_tn',
-    full_name: 'Sudha Chandran',
-    email: 'sudha.hr@veyrahr.com',
-    phone: '+91 98400 11223',
-    branch_name: 'Chennai HQ',
-    department_access: 'All Departments',
-    status: 'Active',
-    permissions: ['Attendance', 'Leave Approvals', 'Shift Roster', 'Payroll Export'],
-    created_at: '2024-01-01T09:00:00.000Z',
-  },
-  {
-    id: 'hr_002',
-    company_id: 'comp_veyra_tn',
-    full_name: 'Rajesh Subramaniam',
-    email: 'rajesh.hr@veyrahr.com',
-    phone: '+91 98400 33445',
-    branch_name: 'Coimbatore Branch',
-    department_access: 'Human Resources',
-    status: 'Active',
-    permissions: ['Attendance', 'Leave Approvals', 'Shift Roster'],
-    created_at: '2024-02-01T09:00:00.000Z',
-  },
-];
-
-const DEFAULT_ATTENDANCE: AttendanceRecord[] = [
-  {
-    id: 'att_001',
-    employee_id: 'emp_001',
-    employee_name: 'Anjali Sharma',
-    company_id: 'comp_veyra_tn',
-    date: new Date().toISOString().split('T')[0],
-    check_in_time: new Date(Date.now() - 4 * 3600 * 1000).toISOString(),
-    status: 'Present',
-    verification_method: 'Dynamic QR + GPS',
-    check_in_location: 'Chennai HQ Geofence (Anna Nagar)',
-    working_hours_mins: 240,
-    break_duration_mins: 30,
-    overtime_mins: 0,
-  },
-  {
-    id: 'att_002',
-    employee_id: 'emp_002',
-    employee_name: 'Ravi Kumar',
-    company_id: 'comp_veyra_tn',
-    date: new Date().toISOString().split('T')[0],
-    check_in_time: new Date(Date.now() - 3.5 * 3600 * 1000).toISOString(),
-    status: 'Present',
-    verification_method: 'Face Biometrics (Kiosk)',
-    check_in_location: 'Coimbatore Branch Kiosk',
-    working_hours_mins: 210,
-    break_duration_mins: 0,
-    overtime_mins: 0,
-  },
-  {
-    id: 'att_003',
-    employee_id: 'emp_004',
-    employee_name: 'Karthik Raja',
-    company_id: 'comp_veyra_tn',
-    date: new Date().toISOString().split('T')[0],
-    check_in_time: new Date(Date.now() - 3 * 3600 * 1000).toISOString(),
-    status: 'Late',
-    verification_method: 'Dynamic QR + GPS',
-    check_in_location: 'Chennai HQ Geofence',
-    working_hours_mins: 180,
-    break_duration_mins: 0,
-    overtime_mins: 0,
-  },
-  {
-    id: 'att_004',
-    employee_id: 'emp_007',
-    employee_name: 'Kamalesh Selvan',
-    company_id: 'comp_veyra_tn',
-    date: new Date().toISOString().split('T')[0],
-    check_in_time: new Date(Date.now() - 2.5 * 3600 * 1000).toISOString(),
-    status: 'Present',
-    verification_method: 'Dynamic QR + GPS',
-    check_in_location: 'Chennai HQ Geofence (Anna Nagar)',
-    working_hours_mins: 150,
-    break_duration_mins: 0,
-    overtime_mins: 0,
-  },
-];
-
-const DEFAULT_LEAVE_REQUESTS: LeaveRequest[] = [
-  {
-    id: 'l_001',
-    employee_id: 'emp_001',
-    employee_name: 'Anjali Sharma',
-    company_id: 'comp_veyra_tn',
-    leave_type_id: 'lt_annual',
-    leave_type_name: 'Annual / Vacation Leave',
-    start_date: '2026-08-12',
-    end_date: '2026-08-12',
-    total_days: 1,
-    reason: 'Family event in Bangalore',
-    status: 'Approved',
-    hr_comments: 'Approved by HR Operations. Enjoy your time off!',
-    created_at: '2026-08-01T10:00:00.000Z',
-  },
-  {
-    id: 'l_002',
-    employee_id: 'emp_001',
-    employee_name: 'Anjali Sharma',
-    company_id: 'comp_veyra_tn',
-    leave_type_id: 'lt_casual',
-    leave_type_name: 'Casual & Personal Leave',
-    start_date: '2026-08-25',
-    end_date: '2026-08-25',
-    total_days: 1,
-    reason: 'Personal errands and bank work',
-    status: 'Approved',
-    hr_comments: 'Approved.',
-    created_at: '2026-08-15T11:30:00.000Z',
-  },
-  {
-    id: 'l_003',
-    employee_id: 'emp_002',
-    employee_name: 'Ravi Kumar',
-    company_id: 'comp_veyra_tn',
-    leave_type_id: 'lt_sick',
-    leave_type_name: 'Sick & Medical Leave',
-    start_date: '2026-08-18',
-    end_date: '2026-08-19',
-    total_days: 2,
-    reason: 'Viral fever & medical checkup',
-    status: 'Approved',
-    hr_comments: 'Approved. Get well soon!',
-    created_at: '2026-08-18T08:00:00.000Z',
-  },
-];
-
-const DEFAULT_ANNOUNCEMENTS: Announcement[] = [
-  {
-    id: 'ann_001',
-    company_id: 'comp_veyra_tn',
-    title: 'Q3 Enterprise Townhall & Operations Review',
-    content: 'All employees and HR managers are invited to the Q3 hybrid townhall scheduled for Friday 4:00 PM IST.',
-    category: 'Event',
-    priority: 'Important',
-    created_at: new Date(Date.now() - 86400000 * 2).toISOString(),
-  },
-  {
-    id: 'ann_002',
-    company_id: 'comp_veyra_tn',
-    title: 'Dynamic QR Attendance Verification Active',
-    content: 'Please ensure location permissions are enabled on your device when scanning your dynamic badge.',
-    category: 'Policy',
-    priority: 'Normal',
-    created_at: new Date(Date.now() - 86400000 * 5).toISOString(),
-  },
-  {
-    id: 'ann_003',
-    company_id: 'comp_veyra_tn',
-    title: 'August Payroll & Direct Deposit Processing',
-    content: 'Monthly salary disbursement and automated payslips will be generated on August 31st.',
-    category: 'General',
-    priority: 'Normal',
-    created_at: new Date(Date.now() - 86400000 * 7).toISOString(),
-  },
-];
-
-const DEFAULT_NOTIFICATIONS: NotificationItem[] = [
-  {
-    id: 'notif_1',
-    recipient_profile_id: 'emp_001',
-    title: 'Digital ID Pass Activated',
-    message: 'Your holographic QR credential is now active for contactless geofence & kiosk clock-ins.',
-    type: 'System',
-    is_read: false,
-    created_at: new Date().toISOString(),
-  },
-  {
-    id: 'notif_2',
-    recipient_profile_id: 'emp_001',
-    title: 'Leave Request Approved',
-    message: 'Your Casual Leave application for Aug 25 has been approved by HR Operations.',
-    type: 'Leave',
-    is_read: false,
-    created_at: new Date(Date.now() - 3600000 * 4).toISOString(),
-  },
-  {
-    id: 'notif_3',
-    recipient_profile_id: 'emp_001',
-    title: 'Monthly Shift Roster Assigned',
-    message: 'General Shift (09:00 AM – 06:00 PM) assigned for all weekdays at Chennai HQ.',
-    type: 'Shift',
-    is_read: false,
-    created_at: new Date(Date.now() - 3600000 * 12).toISOString(),
-  },
-  {
-    id: 'notif_4',
-    recipient_profile_id: 'emp_001',
-    title: 'Company Holiday: Independence Day',
-    message: 'All regional branches will observe a paid holiday on August 15th.',
-    type: 'Announcement',
-    is_read: true,
-    created_at: new Date(Date.now() - 86400000 * 2).toISOString(),
-  },
-];
+const DEFAULT_EMPLOYEES: Employee[] = [];
+const DEFAULT_HR_MANAGERS: HRManager[] = [];
+const DEFAULT_ATTENDANCE: AttendanceRecord[] = [];
+const DEFAULT_LEAVE_REQUESTS: LeaveRequest[] = [];
+const DEFAULT_ANNOUNCEMENTS: Announcement[] = [];
+const DEFAULT_NOTIFICATIONS: NotificationItem[] = [];
 
 export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  // Purge legacy demo data from localStorage on fresh boot
+  useEffect(() => {
+    try {
+      const demoKeys = ['veyra_employees', 'veyra_hr_managers', 'veyra_attendance', 'veyra_leaves', 'veyra_announcements', 'veyra_notifications'];
+      demoKeys.forEach((k) => {
+        const item = localStorage.getItem(k);
+        if (item && (item.includes('emp_001') || item.includes('sudha.hr@veyrahr.com') || item.includes('att_001') || item.includes('l_001'))) {
+          localStorage.removeItem(k);
+        }
+      });
+    } catch {}
+  }, []);
+
   const [employees, setEmployees] = useState<Employee[]>(() => {
     try {
       const saved = localStorage.getItem('veyra_employees');
       if (saved) {
         const parsed: Employee[] = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          // Ensure all default employees exist
-          const existingIds = new Set(parsed.map((p) => p.id));
-          const missingDefaults = DEFAULT_EMPLOYEES.filter((d) => !existingIds.has(d.id));
-          if (missingDefaults.length > 0) {
-            const merged = [...parsed, ...missingDefaults];
-            localStorage.setItem('veyra_employees', JSON.stringify(merged));
-            return merged;
-          }
+        if (Array.isArray(parsed) && !parsed.some(e => e.id === 'emp_001')) {
           return parsed;
         }
       }
-      localStorage.setItem('veyra_employees', JSON.stringify(DEFAULT_EMPLOYEES));
-      return DEFAULT_EMPLOYEES;
+      return [];
     } catch {
-      return DEFAULT_EMPLOYEES;
+      return [];
     }
   });
+
   const [hrManagers, setHrManagers] = useState<HRManager[]>(() => {
     try {
       const saved = localStorage.getItem('veyra_hr_managers');
       if (saved) {
         const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+        if (Array.isArray(parsed) && !parsed.some(h => h.id === 'hr_001')) {
+          return parsed;
+        }
       }
-      localStorage.setItem('veyra_hr_managers', JSON.stringify(DEFAULT_HR_MANAGERS));
-      return DEFAULT_HR_MANAGERS;
+      return [];
     } catch {
-      return DEFAULT_HR_MANAGERS;
+      return [];
     }
   });
   const [securitySessions, setSecuritySessions] = useState<SecuritySession[]>([]);
@@ -503,12 +177,11 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const saved = localStorage.getItem('veyra_attendance');
       if (saved) {
         const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+        if (Array.isArray(parsed) && !parsed.some(a => a.employee_id === 'emp_001')) return parsed;
       }
-      localStorage.setItem('veyra_attendance', JSON.stringify(DEFAULT_ATTENDANCE));
-      return DEFAULT_ATTENDANCE;
+      return [];
     } catch {
-      return DEFAULT_ATTENDANCE;
+      return [];
     }
   });
   const [corrections, setCorrections] = useState<AttendanceCorrection[]>([]);
@@ -517,12 +190,11 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const saved = localStorage.getItem('veyra_leaves');
       if (saved) {
         const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+        if (Array.isArray(parsed) && !parsed.some(l => l.employee_id === 'emp_001')) return parsed;
       }
-      localStorage.setItem('veyra_leaves', JSON.stringify(DEFAULT_LEAVE_REQUESTS));
-      return DEFAULT_LEAVE_REQUESTS;
+      return [];
     } catch {
-      return DEFAULT_LEAVE_REQUESTS;
+      return [];
     }
   });
   const [leaveBalances, setLeaveBalances] = useState<LeaveBalance[]>([]);
@@ -546,12 +218,11 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const saved = localStorage.getItem('veyra_announcements');
       if (saved) {
         const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+        if (Array.isArray(parsed)) return parsed;
       }
-      localStorage.setItem('veyra_announcements', JSON.stringify(DEFAULT_ANNOUNCEMENTS));
-      return DEFAULT_ANNOUNCEMENTS;
+      return [];
     } catch {
-      return DEFAULT_ANNOUNCEMENTS;
+      return [];
     }
   });
   const [notifications, setNotifications] = useState<NotificationItem[]>(() => {
@@ -559,12 +230,11 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const saved = localStorage.getItem('veyra_notifications');
       if (saved) {
         const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+        if (Array.isArray(parsed) && !parsed.some(n => n.recipient_profile_id === 'emp_001')) return parsed;
       }
-      localStorage.setItem('veyra_notifications', JSON.stringify(DEFAULT_NOTIFICATIONS));
-      return DEFAULT_NOTIFICATIONS;
+      return [];
     } catch {
-      return DEFAULT_NOTIFICATIONS;
+      return [];
     }
   });
   const [auditLogs, setAuditLogs] = useState<AuditLog[]>([]);

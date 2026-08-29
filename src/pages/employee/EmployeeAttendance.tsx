@@ -50,23 +50,24 @@ export const EmployeeAttendance: React.FC = () => {
     if (employees.length > 0) {
       return employees[0];
     }
+    const nameParts = (profile?.full_name || 'VeyraHR Employee').split(' ');
     return {
-      id: 'emp_001',
-      company_id: 'comp_veyra_tn',
-      employee_id: 'VEY-EMP-0001',
-      first_name: 'Anjali',
-      last_name: 'Sharma',
-      email: 'anjali.sharma@veyrahr.com',
-      phone: '+91 98765 43210',
-      designation: 'Senior Full Stack Engineer',
-      department_name: 'Engineering & Tech',
-      branch_name: 'Chennai HQ',
-      work_location: 'Chennai HQ, Tamil Nadu',
-      joining_date: '2024-03-01',
+      id: profile?.id || 'emp_current',
+      company_id: profile?.company_id || 'comp_veyra_tn',
+      employee_id: profile?.id ? `VEY-EMP-${profile.id.slice(-4).toUpperCase()}` : 'VEY-EMP-0001',
+      first_name: nameParts[0] || 'VeyraHR',
+      last_name: nameParts.slice(1).join(' ') || 'Employee',
+      email: profile?.email || 'employee@veyrahr.com',
+      phone: profile?.phone || '+91 98765 00000',
+      designation: 'Software Specialist',
+      department_name: profile?.department_access || 'Engineering & Tech',
+      branch_name: profile?.branch_name || 'Chennai HQ',
+      work_location: profile?.branch_name || 'Chennai HQ, Tamil Nadu',
+      joining_date: new Date().toISOString().split('T')[0],
       status: 'Active',
-      emergency_contact: '+91 98765 00001 (Father)',
-      address: 'Flat 4B, Emerald Heights, Anna Nagar, Chennai',
-      avatar_url: 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=150&auto=format&fit=crop&q=80',
+      emergency_contact: '+91 98765 00001',
+      address: 'Chennai HQ Campus',
+      avatar_url: profile?.avatar_url || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80',
     };
   }, [employees, profile]);
 

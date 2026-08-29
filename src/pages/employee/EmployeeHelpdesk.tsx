@@ -47,62 +47,7 @@ export interface HelpdeskTicket {
   }[];
 }
 
-const INITIAL_TICKETS: HelpdeskTicket[] = [
-  {
-    id: 't_1',
-    ticket_number: 'HD-2026-081',
-    employee_id: 'emp_001',
-    employee_name: 'Anjali Sharma',
-    category: 'Payroll & Salary',
-    subject: 'Form 16 Part B Tax Declaration Clarification',
-    description: 'Need assistance verifying the section 80C investment proof uploaded for Q1 tax declaration.',
-    priority: 'Normal',
-    status: 'In Review',
-    created_at: '2026-08-27T10:30:00.000Z',
-    assigned_to: 'Priya Sundaram · HR Operations',
-    messages: [
-      {
-        sender: 'Anjali Sharma',
-        is_hr: false,
-        text: 'Hi HR team, I submitted my ELSS tax investment receipt for Q1. Could you confirm if it was successfully approved?',
-        timestamp: 'Aug 27, 10:30 AM',
-      },
-      {
-        sender: 'Priya Sundaram · HR Operations',
-        is_hr: true,
-        text: 'Hello Anjali! Your ELSS certificate has been reviewed and verified by payroll accounts. It will reflect in August payslip TDS computation.',
-        timestamp: 'Aug 27, 02:15 PM',
-      },
-    ],
-  },
-  {
-    id: 't_2',
-    ticket_number: 'HD-2026-064',
-    employee_id: 'emp_001',
-    employee_name: 'Anjali Sharma',
-    category: 'Health & Benefits',
-    subject: 'Group Medical Insurance E-Card Download',
-    description: 'Request for cashless hospitalization policy card PDF for family dependents.',
-    priority: 'Normal',
-    status: 'Resolved',
-    created_at: '2026-08-10T11:00:00.000Z',
-    assigned_to: 'Karthik Raja · Benefits Team',
-    messages: [
-      {
-        sender: 'Anjali Sharma',
-        is_hr: false,
-        text: 'Requesting policy card PDF for Star Health group mediclaim policy.',
-        timestamp: 'Aug 10, 11:00 AM',
-      },
-      {
-        sender: 'Karthik Raja · Benefits Team',
-        is_hr: true,
-        text: 'Attached your Star Health E-Card (Policy #SH-VEY-98210). Active at all network hospitals.',
-        timestamp: 'Aug 10, 04:00 PM',
-      },
-    ],
-  },
-];
+const INITIAL_TICKETS: HelpdeskTicket[] = [];
 
 const FAQS = [
   {
@@ -133,20 +78,21 @@ export const EmployeeHelpdesk: React.FC = () => {
       const match = employees.find((e) => e.email?.toLowerCase() === profile.email.toLowerCase());
       if (match) return match;
     }
+    const nameParts = (profile?.full_name || 'VeyraHR Employee').split(' ');
     return employees[0] || {
-      id: 'emp_001',
-      employee_id: 'VEY-EMP-0001',
-      first_name: 'Anjali',
-      last_name: 'Sharma',
+      id: profile?.id || 'emp_current',
+      employee_id: profile?.id ? `VEY-EMP-${profile.id.slice(-4).toUpperCase()}` : 'VEY-EMP-0001',
+      first_name: nameParts[0] || 'VeyraHR',
+      last_name: nameParts.slice(1).join(' ') || 'Employee',
     };
   }, [employees, profile]);
 
   const [tickets, setTickets] = useState<HelpdeskTicket[]>(() => {
     try {
       const saved = localStorage.getItem(`veyra_tickets_${currentEmp.id}`);
-      return saved ? JSON.parse(saved) : INITIAL_TICKETS;
+      return saved ? JSON.parse(saved) : [];
     } catch {
-      return INITIAL_TICKETS;
+      return [];
     }
   });
 

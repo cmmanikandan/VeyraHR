@@ -48,81 +48,7 @@ export interface EmployeeDocument {
   custom_image_url?: string;
 }
 
-const DEFAULT_DOCS: EmployeeDocument[] = [
-  {
-    id: 'doc_1',
-    employee_id: 'emp_001',
-    category: 'Identity',
-    title: 'Aadhaar Card (National ID)',
-    doc_number: '•••• •••• 8912',
-    file_name: 'Aadhaar_National_ID.pdf',
-    file_size: '1.4 MB',
-    issued_date: '2022-04-10',
-    status: 'Verified',
-    verification_hash: 'UIDAI-VERIFIED-9842A',
-  },
-  {
-    id: 'doc_2',
-    employee_id: 'emp_001',
-    category: 'Identity',
-    title: 'Permanent Account Number (PAN)',
-    doc_number: 'ABCPS••••K',
-    file_name: 'PAN_Card_Signed.pdf',
-    file_size: '820 KB',
-    issued_date: '2021-08-15',
-    status: 'Verified',
-    verification_hash: 'ITD-PAN-VERIFIED',
-  },
-  {
-    id: 'doc_3',
-    employee_id: 'emp_001',
-    category: 'Employment',
-    title: 'Employment Agreement & Appointment Letter',
-    doc_number: 'VEY-HR-2024-0012',
-    file_name: 'Veyra_Appointment_Letter.pdf',
-    file_size: '2.1 MB',
-    issued_date: '2024-01-15',
-    status: 'Verified',
-    verification_hash: 'DS-OFFER-SIGN-OK',
-  },
-  {
-    id: 'doc_4',
-    employee_id: 'emp_001',
-    category: 'Academic',
-    title: 'B.Tech Degree in Computer Science & Engineering',
-    doc_number: 'DEG-CS-2021-482',
-    file_name: 'AnnaUniv_BTech_Degree.pdf',
-    file_size: '3.2 MB',
-    issued_date: '2021-06-20',
-    status: 'Verified',
-    verification_hash: 'UNIV-CONVOCATION-2021',
-  },
-  {
-    id: 'doc_5',
-    employee_id: 'emp_001',
-    category: 'Financial',
-    title: 'Bank Passbook & Cancelled Cheque',
-    doc_number: 'HDFC •••• 4012',
-    file_name: 'Bank_Passbook_Verification.pdf',
-    file_size: '950 KB',
-    issued_date: '2024-01-18',
-    status: 'Verified',
-    verification_hash: 'HDFC-ACC-VERIFIED',
-  },
-  {
-    id: 'doc_6',
-    employee_id: 'emp_001',
-    category: 'Identity',
-    title: 'Passport (Republic of India)',
-    doc_number: 'V•••••48',
-    file_name: 'Passport_Copy_Valid.pdf',
-    file_size: '2.8 MB',
-    issued_date: '2019-09-12',
-    expiry_date: '2029-09-11',
-    status: 'Verified',
-    verification_hash: 'MEA-PASSPORT-VALID',
-  },
-];
+const DEFAULT_DOCS: EmployeeDocument[] = [];
 
 export const EmployeeDocuments: React.FC = () => {
   const navigate = useNavigate();
@@ -134,11 +60,12 @@ export const EmployeeDocuments: React.FC = () => {
       const match = employees.find((e) => e.email?.toLowerCase() === profile.email.toLowerCase());
       if (match) return match;
     }
+    const nameParts = (profile?.full_name || 'VeyraHR Employee').split(' ');
     return employees[0] || {
-      id: 'emp_001',
-      employee_id: 'VEY-EMP-0001',
-      first_name: 'Anjali',
-      last_name: 'Sharma',
+      id: profile?.id || 'emp_current',
+      employee_id: profile?.id ? `VEY-EMP-${profile.id.slice(-4).toUpperCase()}` : 'VEY-EMP-0001',
+      first_name: nameParts[0] || 'VeyraHR',
+      last_name: nameParts.slice(1).join(' ') || 'Employee',
     };
   }, [employees, profile]);
 

@@ -38,14 +38,15 @@ export const EmployeePayslips: React.FC = () => {
       const match = employees.find((e) => e.email?.toLowerCase() === profile.email.toLowerCase());
       if (match) return match;
     }
+    const nameParts = (profile?.full_name || 'VeyraHR Employee').split(' ');
     return employees[0] || {
-      id: 'emp_001',
-      employee_id: 'VEY-EMP-0001',
-      first_name: 'Anjali',
-      last_name: 'Sharma',
-      designation: 'Senior Full Stack Engineer',
-      department_name: 'Engineering & Tech',
-      work_location: 'Chennai HQ',
+      id: profile?.id || 'emp_current',
+      employee_id: profile?.id ? `VEY-EMP-${profile.id.slice(-4).toUpperCase()}` : 'VEY-EMP-0001',
+      first_name: nameParts[0] || 'VeyraHR',
+      last_name: nameParts.slice(1).join(' ') || 'Employee',
+      designation: 'Operations Specialist',
+      department_name: profile?.department_access || 'Engineering & Tech',
+      work_location: profile?.branch_name || 'Chennai HQ',
     };
   }, [employees, profile]);
 
