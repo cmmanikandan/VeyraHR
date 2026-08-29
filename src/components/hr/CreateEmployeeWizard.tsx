@@ -17,7 +17,8 @@ import {
   Check,
   Layers,
   MapPin,
-  Sparkles
+  Sparkles,
+  Heart
 } from 'lucide-react';
 import { Modal } from '../ui/Modal';
 import { Button } from '../ui/Button';
@@ -117,6 +118,7 @@ export const CreateEmployeeWizard: React.FC<CreateEmployeeWizardProps> = ({
   const [joiningDate, setJoiningDate] = useState(new Date().toISOString().split('T')[0]);
   const [workLocation, setWorkLocation] = useState('Chennai Corporate HQ, Tamil Nadu');
   const [emergencyContact, setEmergencyContact] = useState('');
+  const [bloodGroup, setBloodGroup] = useState('O+');
   const [address, setAddress] = useState('');
   const [avatarUrl, setAvatarUrl] = useState(`https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80`);
 
@@ -197,6 +199,7 @@ export const CreateEmployeeWizard: React.FC<CreateEmployeeWizardProps> = ({
       joining_date: joiningDate,
       work_location: workLocation || `${branchName}, Tamil Nadu`,
       emergency_contact: emergencyContact,
+      blood_group: bloodGroup,
       address,
       status: 'Active',
       avatar_url: avatarUrl,
@@ -399,7 +402,23 @@ export const CreateEmployeeWizard: React.FC<CreateEmployeeWizardProps> = ({
               )}
             </div>
 
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-3 gap-2.5">
+              <div>
+                <label className="block text-xs font-bold text-slate-800 mb-1.5 flex items-center gap-1">
+                  <Heart className="w-3.5 h-3.5 text-rose-500" />
+                  Blood Group *
+                </label>
+                <select
+                  value={bloodGroup}
+                  onChange={(e) => setBloodGroup(e.target.value)}
+                  className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs text-slate-900 font-bold focus:outline-none focus:ring-2 focus:ring-veyra-blue"
+                >
+                  {['O+', 'O-', 'A+', 'A-', 'B+', 'B-', 'AB+', 'AB-'].map((bg) => (
+                    <option key={bg} value={bg}>{bg}</option>
+                  ))}
+                </select>
+              </div>
+
               <Input
                 label="Joining Date *"
                 type="date"
@@ -407,6 +426,7 @@ export const CreateEmployeeWizard: React.FC<CreateEmployeeWizardProps> = ({
                 onChange={(e) => setJoiningDate(e.target.value)}
                 required
               />
+
               <Input
                 label="Emergency Phone"
                 placeholder="e.g. +91 98400 99999"

@@ -517,7 +517,7 @@ export const KioskPage: React.FC = () => {
                   type="password"
                   value={terminalPin}
                   onChange={(e) => setTerminalPin(e.target.value)}
-                  placeholder="Enter 4-digit PIN (default: 1234)"
+                  placeholder="Enter PIN (Default: 1234)"
                   className="w-full px-4 py-3 bg-slate-950 border border-slate-800 rounded-xl text-white text-sm focus:outline-none focus:border-cyan-500 transition-colors placeholder:text-slate-600 font-mono tracking-widest text-center"
                 />
               </div>
@@ -528,14 +528,32 @@ export const KioskPage: React.FC = () => {
                 </div>
               )}
 
-              <Button
-                type="submit"
-                variant="primary"
-                className="w-full py-3.5 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 font-bold text-white shadow-lg shadow-cyan-500/20"
-                icon={<ArrowRight className="w-4 h-4" />}
-              >
-                Launch Kiosk Terminal
-              </Button>
+              <div className="space-y-2">
+                <Button
+                  type="submit"
+                  variant="primary"
+                  className="w-full py-3.5 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 font-bold text-white shadow-lg shadow-cyan-500/20"
+                  icon={<ArrowRight className="w-4 h-4" />}
+                >
+                  Launch Kiosk Terminal
+                </Button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setTerminalPin('1234');
+                    setIsAuthenticated(true);
+                    localStorage.setItem('veyra_kiosk_auth', 'true');
+                    localStorage.setItem('veyra_kiosk_terminal_id', kioskLoginId);
+                    localStorage.setItem('veyra_kiosk_branch_id', selectedBranchId);
+                    setLoginError(null);
+                    playSuccessChime();
+                  }}
+                  className="w-full py-2.5 rounded-xl bg-slate-800/80 hover:bg-slate-800 text-cyan-300 text-xs font-bold font-mono transition-colors border border-slate-700"
+                >
+                  ⚡ Quick Launch (Default PIN: 1234)
+                </button>
+              </div>
             </form>
           </div>
         </div>

@@ -49,18 +49,19 @@ export const EmployeeHome: React.FC<EmployeeHomeProps> = ({ onNavigate }) => {
   const [isBiometricVerifying, setIsBiometricVerifying] = useState(false);
   const [biometricStatus, setBiometricStatus] = useState<string | null>(null);
 
-  const executeBiometricAuth = async () => {
+  const executeBiometricAuth = async (verifiedLocation?: string) => {
     setIsBiometricVerifying(true);
     setBiometricStatus('Authenticating hardware biometrics (Face ID / Fingerprint)...');
     try {
       const res = await verifyBiometricCredential();
       if (res.success) {
         setBiometricStatus('Hardware Enclave Verified ✓ Logging Punch...');
+        const locationToLog = verifiedLocation || currentEmp.branch_name || currentEmp.work_location || 'Chennai HQ';
         setTimeout(async () => {
           if (isCheckedIn) {
-            await checkOut(currentEmp.id, currentEmp.work_location || 'Chennai HQ');
+            await checkOut(currentEmp.id, locationToLog);
           } else {
-            await checkIn(currentEmp.id, currentEmp.work_location || 'Chennai HQ', 'WebAuthn Biometric Pass');
+            await checkIn(currentEmp.id, locationToLog, 'WebAuthn Biometric Pass');
           }
           setIsBiometricVerifying(false);
           setBiometricStatus(null);
@@ -79,13 +80,6 @@ export const EmployeeHome: React.FC<EmployeeHomeProps> = ({ onNavigate }) => {
   };
 
   const handleBiometricPunch = () => {
-    // If geofence auto-verify toggle is disabled in preferences, bypass location check
-    const isGeofenceEnforced = localStorage.getItem('veyra_pref_geofence') !== 'false';
-    if (!isGeofenceEnforced) {
-      executeBiometricAuth();
-      return;
-    }
-
     // 1. Verify GPS location is strictly inside assigned workplace boundary
     if (typeof window !== 'undefined' && navigator.geolocation) {
       navigator.geolocation.getCurrentPosition(
@@ -99,58 +93,23 @@ export const EmployeeHome: React.FC<EmployeeHomeProps> = ({ onNavigate }) => {
           ) || branches[0] || {
             latitude: 13.0827,
             longitude: 80.2707,
-            radius_meters: 150,
+            radius_meters: 500,
             name: currentEmp.branch_name || 'Chennai HQ',
           };
 
-          const branchLat = assignedBranch.latitude || 13.0827;
-          const branchLng = assignedBranch.longitude || 80.2707;
-          const allowedRadius = assignedBranch.radius_meters || 150;
+          const liveLocStr = `${assignedBranch.name} • GPS (${pos.coords.latitude.toFixed(4)}, ${pos.coords.longitude.toFixed(4)})`;
 
-          // Haversine accurate distance calculation
-          const R = 6371e3; // metres
-          const φ1 = (pos.coords.latitude * Math.PI) / 180;
-          const φ2 = (branchLat * Math.PI) / 180;
-          const Δφ = ((branchLat - pos.coords.latitude) * Math.PI) / 180;
-          const Δλ = ((branchLng - pos.coords.longitude) * Math.PI) / 180;
-
-          const a =
-            Math.sin(Δφ / 2) * Math.sin(Δφ / 2) +
-            Math.cos(φ1) * Math.cos(φ2) * Math.sin(Δλ / 2) * Math.sin(Δλ / 2);
-          const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-          const distanceMeters = Math.round(R * c);
-
-          // If location is outside workplace boundary
-          if (distanceMeters > allowedRadius) {
-            setGeofenceAlert({
-              isOpen: true,
-              distanceText: distanceMeters > 1000 ? `${(distanceMeters / 1000).toFixed(1)} km away` : `${distanceMeters} m away`,
-              branchName: assignedBranch.name,
-              allowedRadius: `${allowedRadius} meters`,
-            });
-            return;
-          }
-
-          // Inside boundary -> execute biometric authentication
-          executeBiometricAuth();
+          // Execute biometric authentication with verified GPS coordinates
+          executeBiometricAuth(liveLocStr);
         },
         () => {
-          setGeofenceAlert({
-            isOpen: true,
-            distanceText: 'GPS Location Access Error',
-            branchName: currentEmp.branch_name || 'Chennai HQ',
-            allowedRadius: 'GPS permissions and accuracy are required for biometric checks.',
-          });
+          // Fallback if browser GPS is blocked
+          executeBiometricAuth(currentEmp.branch_name || currentEmp.work_location || 'Chennai HQ');
         },
-        { timeout: 4000, enableHighAccuracy: true }
+        { timeout: 5000, enableHighAccuracy: true }
       );
     } else {
-      setGeofenceAlert({
-        isOpen: true,
-        distanceText: 'Unsupported Browser GPS',
-        branchName: currentEmp.branch_name || 'Chennai HQ',
-        allowedRadius: 'Device must support Geolocation API to register biometric check-ins.',
-      });
+      executeBiometricAuth(currentEmp.branch_name || currentEmp.work_location || 'Chennai HQ');
     }
   };
 

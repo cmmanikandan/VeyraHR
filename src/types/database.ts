@@ -160,6 +160,7 @@ export interface Employee {
   joining_date: string;
   work_location: string;
   emergency_contact?: string;
+  blood_group?: string;
   address?: string;
   status: 'Active' | 'Inactive' | 'On Leave';
   avatar_url?: string;

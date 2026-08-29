@@ -103,6 +103,15 @@ export const HRLiveAttendance: React.FC = () => {
         </div>
         <div className="flex items-center gap-2">
           <Button
+            variant="primary"
+            size="sm"
+            onClick={() => window.open('/kiosk', '_blank')}
+            icon={<ShieldCheck className="w-4 h-4" />}
+            className="bg-indigo-600 hover:bg-indigo-700 font-bold"
+          >
+            Launch Kiosk Tablet
+          </Button>
+          <Button
             variant="outline"
             size="sm"
             onClick={() => {

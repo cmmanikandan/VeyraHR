@@ -193,6 +193,7 @@ export const HREmployees: React.FC = () => {
   const [editJoiningDate, setEditJoiningDate] = useState('');
   const [editWorkLocation, setEditWorkLocation] = useState('');
   const [editEmergencyContact, setEditEmergencyContact] = useState('');
+  const [editBloodGroup, setEditBloodGroup] = useState('O+');
   const [editAddress, setEditAddress] = useState('');
   const [editAvatarUrl, setEditAvatarUrl] = useState('');
   const [editStatus, setEditStatus] = useState<'Active' | 'On Leave' | 'Inactive'>('Active');
@@ -217,6 +218,7 @@ export const HREmployees: React.FC = () => {
     setEditJoiningDate(emp.joining_date || new Date().toISOString().split('T')[0]);
     setEditWorkLocation(emp.work_location || 'Chennai HQ, Tamil Nadu');
     setEditEmergencyContact(emp.emergency_contact || '');
+    setEditBloodGroup(emp.blood_group || 'O+');
     setEditAddress(emp.address || '');
     setEditAvatarUrl(emp.avatar_url || '');
     setEditStatus((emp.status as any) || 'Active');
@@ -265,6 +267,7 @@ export const HREmployees: React.FC = () => {
       joining_date: editJoiningDate,
       work_location: editWorkLocation,
       emergency_contact: editEmergencyContact,
+      blood_group: editBloodGroup,
       address: editAddress,
       avatar_url: editAvatarUrl,
       status: editStatus,
@@ -745,14 +748,26 @@ export const HREmployees: React.FC = () => {
             {/* Section 3: Contact & Address */}
             <div className="space-y-3 pt-2">
               <p className="text-xs font-extrabold text-[#172033] uppercase tracking-wider">3. Address & Emergency Contact</p>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-3 gap-2.5">
+                <div>
+                  <label className="block text-xs font-bold text-veyra-text mb-1">Blood Group (ID Card)</label>
+                  <select
+                    value={editBloodGroup}
+                    onChange={(e) => setEditBloodGroup(e.target.value)}
+                    className="w-full px-3 py-2 rounded-xl border border-veyra-border bg-white text-xs font-bold focus:outline-none focus:ring-2 focus:ring-veyra-blue"
+                  >
+                    {['O+', 'O-', 'A+', 'A-', 'B+', 'B-', 'AB+', 'AB-'].map((bg) => (
+                      <option key={bg} value={bg}>{bg}</option>
+                    ))}
+                  </select>
+                </div>
                 <div>
                   <label className="block text-xs font-bold text-veyra-text mb-1">Emergency Contact</label>
                   <input
                     type="text"
                     value={editEmergencyContact}
                     onChange={(e) => setEditEmergencyContact(e.target.value)}
-                    placeholder="e.g. Spouse / Parent (+91 98400 11111)"
+                    placeholder="e.g. +91 98400 11111"
                     className="w-full px-3 py-2 rounded-xl border border-veyra-border bg-white text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-veyra-blue"
                   />
                 </div>

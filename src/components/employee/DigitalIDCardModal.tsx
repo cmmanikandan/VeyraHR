@@ -210,7 +210,7 @@ export const DigitalIDCardModal: React.FC<DigitalIDCardModalProps> = ({
                     <Heart className="w-3 h-3 text-rose-400" /> Medical & Emergency
                   </span>
                   <span className="px-2 py-0.5 bg-rose-950/80 text-rose-300 border border-rose-500/40 text-[9px] font-black font-mono">
-                    BLOOD GROUP: B+
+                    BLOOD GROUP: {employee.blood_group || 'O+'}
                   </span>
                 </div>
 
@@ -229,10 +229,10 @@ export const DigitalIDCardModal: React.FC<DigitalIDCardModalProps> = ({
               {/* Corporate Headquarters Address */}
               <div className="bg-slate-900/90 p-3 border border-slate-800 space-y-1 text-[10px]">
                 <span className="text-cyan-400 font-mono font-bold uppercase flex items-center gap-1">
-                  <MapPin className="w-3 h-3 text-cyan-400" /> Corporate Headquarters
+                  <MapPin className="w-3 h-3 text-cyan-400" /> Corporate Headquarters & Location
                 </span>
                 <p className="text-slate-300 leading-relaxed">
-                  VeyraHR Technologies Pvt Ltd • OMR IT Expressway, Anna Nagar & Regional Hubs, Chennai, Tamil Nadu - 600040, India
+                  {employee.address || `${employee.work_location || employee.branch_name || 'Chennai HQ Campus'}, Tamil Nadu, India`}
                 </p>
                 <p className="text-slate-400 font-mono text-[9px] pt-1">
                   Support: support@veyrahr.com • Tel: +91 44 2840 9000
