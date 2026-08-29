@@ -67,14 +67,17 @@ export const HRDocumentsPage: React.FC = () => {
   const [newDocNumber, setNewDocNumber] = useState('');
   const [newFileName, setNewFileName] = useState('');
 
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+
   // Storage for all employees documents
   const [docsMap, setDocsMap] = useState<Record<string, EmployeeDocRecord[]>>(() => {
-    const saved = localStorage.getItem('veyra_hr_employee_docs');
-    if (saved) {
-      try {
-        return JSON.parse(saved);
-      } catch {}
-    }
+    try {
+      const saved = localStorage.getItem('veyra_hr_employee_docs');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed && typeof parsed === 'object') return parsed;
+      }
+    } catch {}
     return {};
   });
 
@@ -85,47 +88,12 @@ export const HRDocumentsPage: React.FC = () => {
     if (savedEmpDocs) {
       try {
         const parsed = JSON.parse(savedEmpDocs);
-        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+        if (Array.isArray(parsed) && !parsed.some(d => d.id?.includes('doc_id_') || d.title?.includes('Aadhaar Card (National ID)'))) {
+          return parsed;
+        }
       } catch {}
     }
-    return [
-      {
-        id: `doc_id_${empId}_1`,
-        employee_id: empId,
-        category: 'Identity',
-        title: 'Aadhaar Card (National ID)',
-        doc_number: '•••• •••• 9842',
-        file_name: 'Aadhaar_National_ID.pdf',
-        file_size: '1.4 MB',
-        issued_date: '2022-04-10',
-        status: 'Verified',
-        verification_hash: 'UIDAI-VERIFIED-7812',
-      },
-      {
-        id: `doc_id_${empId}_2`,
-        employee_id: empId,
-        category: 'Identity',
-        title: 'Permanent Account Number (PAN)',
-        doc_number: 'ABCPS••••K',
-        file_name: 'PAN_Card_Signed.pdf',
-        file_size: '820 KB',
-        issued_date: '2021-08-15',
-        status: 'Verified',
-        verification_hash: 'ITD-PAN-VERIFIED',
-      },
-      {
-        id: `doc_id_${empId}_3`,
-        employee_id: empId,
-        category: 'Employment',
-        title: 'Appointment Offer Letter',
-        doc_number: 'VEY-ENG-2024-001',
-        file_name: 'VeyraHR_Appointment_Offer.pdf',
-        file_size: '2.4 MB',
-        issued_date: '2024-03-01',
-        status: 'Verified',
-        verification_hash: 'DS-SIGN-OFFICIAL',
-      },
-    ];
+    return [];
   };
 
   const handleUpdateDocStatus = (docId: string, status: 'Verified' | 'Rejected') => {
@@ -145,14 +113,18 @@ export const HRDocumentsPage: React.FC = () => {
     e.preventDefault();
     if (!selectedEmployee || !newTitle) return;
 
+    const realSize = selectedFile
+      ? `${(selectedFile.size / (1024 * 1024)).toFixed(2)} MB`
+      : '1.2 MB';
+
     const newDoc: EmployeeDocRecord = {
       id: `doc_${Date.now()}`,
       employee_id: selectedEmployee.id,
       category: newCategory,
       title: newTitle,
       doc_number: newDocNumber || undefined,
-      file_name: newFileName || `${newTitle.replace(/\s+/g, '_')}.pdf`,
-      file_size: `${(Math.random() * 2 + 0.5).toFixed(1)} MB`,
+      file_name: newFileName || selectedFile?.name || `${newTitle.replace(/\s+/g, '_')}.pdf`,
+      file_size: realSize,
       issued_date: new Date().toISOString().split('T')[0],
       status: 'Verified',
       verification_hash: `HR-UPLOAD-${Math.random().toString(36).substring(2, 8).toUpperCase()}`,
@@ -166,6 +138,7 @@ export const HRDocumentsPage: React.FC = () => {
     localStorage.setItem(`veyra_docs_${selectedEmployee.id}`, JSON.stringify(updated));
 
     setIsUploadModalOpen(false);
+    setSelectedFile(null);
     setNewTitle('');
     setNewDocNumber('');
     setNewFileName('');
@@ -356,8 +329,14 @@ export const HRDocumentsPage: React.FC = () => {
 
           {/* Documents Grid */}
           {activeEmployeeDocs.length === 0 ? (
-            <Card className="text-center py-12 bg-white border-[#E8E2D9]">
-              <p className="text-xs text-slate-500">No documents found in category "{selectedCategory}".</p>
+            <Card className="text-center py-12 bg-white border-[#E8E2D9] rounded-2xl shadow-2xs">
+              <EmptyState
+                icon={<FolderOpen className="w-10 h-10 text-veyra-blue" />}
+                title={selectedCategory === 'All' ? 'No Documents in Dossier' : `No ${selectedCategory} Documents`}
+                description={`No verified files uploaded yet for ${selectedEmployee.first_name}. Upload their KYC, offer letter, or certificates.`}
+                actionLabel="Upload First Document"
+                onAction={() => setIsUploadModalOpen(true)}
+              />
             </Card>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -530,22 +509,43 @@ export const HRDocumentsPage: React.FC = () => {
           </div>
 
           <div>
-            <label className="block text-xs font-bold text-slate-700 mb-1">File Name</label>
-            <input
-              type="text"
-              placeholder="e.g. Signed_Service_Letter.pdf"
-              value={newFileName}
-              onChange={(e) => setNewFileName(e.target.value)}
-              className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-white text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-veyra-blue"
-            />
+            <label className="block text-xs font-bold text-slate-700 mb-1.5">Select Document File (.PDF, .PNG, .JPG, .DOCX) *</label>
+            <div className="border-2 border-dashed border-slate-300 hover:border-veyra-blue bg-slate-50 p-4 rounded-xl text-center cursor-pointer transition-colors"
+                 onClick={() => document.getElementById('hr-file-picker')?.click()}>
+              <input
+                id="hr-file-picker"
+                type="file"
+                accept=".pdf,.png,.jpg,.jpeg,.docx"
+                className="hidden"
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (file) {
+                    setSelectedFile(file);
+                    setNewFileName(file.name);
+                    if (!newTitle) {
+                      setNewTitle(file.name.replace(/\.[^/.]+$/, '').replace(/_/g, ' '));
+                    }
+                  }
+                }}
+              />
+              <div className="flex flex-col items-center justify-center space-y-1">
+                <FileText className="w-8 h-8 text-veyra-blue" />
+                <span className="text-xs font-bold text-slate-800">
+                  {selectedFile ? selectedFile.name : 'Click to Browse File'}
+                </span>
+                <span className="text-[10px] text-slate-500 font-mono">
+                  {selectedFile ? `${(selectedFile.size / (1024 * 1024)).toFixed(2)} MB` : 'Max size: 10MB'}
+                </span>
+              </div>
+            </div>
           </div>
 
           <div className="flex justify-end gap-2.5 pt-3 border-t border-slate-100">
-            <Button type="button" variant="outline" onClick={() => setIsUploadModalOpen(false)}>
+            <Button type="button" variant="outline" onClick={() => { setIsUploadModalOpen(false); setSelectedFile(null); }}>
               Cancel
             </Button>
             <Button type="submit" variant="primary" className="font-bold shadow-xs">
-              Save to Dossier
+              Upload to Dossier
             </Button>
           </div>
         </form>
