@@ -171,12 +171,23 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       { id: 'r9', company_id: 'comp_veyra_tn', department_name: 'Customer Support', title: 'Technical Support Lead', level: 'L3 - Senior', min_salary: 550000, max_salary: 950000, description: 'Level 2 customer escalation and service level agreements' },
     ];
   });
-  const [branches, setBranches] = useState<Branch[]>([
-    { id: 'b1', company_id: 'comp_veyra_tn', name: 'Chennai HQ', district: 'Chennai', city: 'Anna Nagar', address: 'No. 42, 2nd Main Road', pincode: '600040', manager: 'Admin' },
-    { id: 'b2', company_id: 'comp_veyra_tn', name: 'Coimbatore Branch', district: 'Coimbatore', city: 'Gandhipuram', address: 'Cross Cut Road', pincode: '641012', manager: 'Priya Sundaram' },
-    { id: 'b3', company_id: 'comp_veyra_tn', name: 'Madurai Regional Hub', district: 'Madurai', city: 'KK Nagar', address: '80 Feet Road', pincode: '625020', manager: 'Ramesh Kumar' },
-    { id: 'b4', company_id: 'comp_veyra_tn', name: 'Karur Office', district: 'Karur', city: 'Thanthonimalai', address: 'Bye-pass Road', pincode: '639005', manager: 'Senthil Kumar' },
-  ]);
+  const [branches, setBranches] = useState<Branch[]>(() => {
+    // Try loading previously saved branches from localStorage (set by AdminBranchesPage)
+    try {
+      const saved = localStorage.getItem('veyra_branches_data');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+    } catch {}
+    // Default seed branches
+    return [
+      { id: 'b1', company_id: 'comp_veyra_tn', name: 'Chennai HQ', district: 'Chennai', city: 'Anna Nagar', address: 'No. 42, 2nd Main Road', pincode: '600040', manager: 'Admin' },
+      { id: 'b2', company_id: 'comp_veyra_tn', name: 'Coimbatore Branch', district: 'Coimbatore', city: 'Gandhipuram', address: 'Cross Cut Road', pincode: '641012', manager: 'Priya Sundaram' },
+      { id: 'b3', company_id: 'comp_veyra_tn', name: 'Madurai Regional Hub', district: 'Madurai', city: 'KK Nagar', address: '80 Feet Road', pincode: '625020', manager: 'Ramesh Kumar' },
+      { id: 'b4', company_id: 'comp_veyra_tn', name: 'Karur Office', district: 'Karur', city: 'Thanthonimalai', address: 'Bye-pass Road', pincode: '639005', manager: 'Senthil Kumar' },
+    ];
+  });
   const [attendance, setAttendance] = useState<AttendanceRecord[]>(() => {
     try {
       const saved = localStorage.getItem('veyra_attendance');
@@ -369,7 +380,10 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       // 10. Branches
       const { data: branchData } = await supabase.from('branches').select('*');
-      if (branchData && branchData.length > 0) setBranches(branchData);
+      if (branchData && branchData.length > 0) {
+        setBranches(branchData);
+        try { localStorage.setItem('veyra_branches_data', JSON.stringify(branchData)); } catch {}
+      }
 
       // 11. Departments
       const { data: deptData } = await supabase.from('departments').select('*');
@@ -1035,7 +1049,11 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     } catch (e) {
       console.warn('Branch sync:', e);
     }
-    setBranches((prev) => [...prev, newBranch]);
+    setBranches((prev) => {
+      const updated = [newBranch, ...prev];
+      try { localStorage.setItem('veyra_branches_data', JSON.stringify(updated)); } catch {}
+      return updated;
+    });
   };
 
   const deleteCompanyBranch = async (id: string) => {
@@ -1044,7 +1062,11 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     } catch (e) {
       console.warn('Branch delete sync:', e);
     }
-    setBranches((prev) => prev.filter((b) => b.id !== id));
+    setBranches((prev) => {
+      const updated = prev.filter((b) => b.id !== id);
+      try { localStorage.setItem('veyra_branches_data', JSON.stringify(updated)); } catch {}
+      return updated;
+    });
   };
 
   const createDepartment = async (d: Omit<Department, 'id'>) => {

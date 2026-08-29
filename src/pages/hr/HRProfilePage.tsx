@@ -32,7 +32,7 @@ import { supabase } from '../../lib/supabase';
 
 export const HRProfilePage: React.FC = () => {
   const { profile, setProfile, logout } = useAuth();
-  const { employees, leaveRequests, shifts, announcements } = useData();
+  const { employees, leaveRequests, shifts, announcements, branches } = useData();
   const navigate = useNavigate();
 
   const [isEditing, setIsEditing] = useState(false);
@@ -320,11 +320,10 @@ export const HRProfilePage: React.FC = () => {
                     onChange={(e) => setBranchName(e.target.value)}
                     className="w-full px-3.5 py-2.5 rounded-xl border border-veyra-blue bg-white text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-veyra-blue/30"
                   >
-                    <option>Chennai HQ</option>
-                    <option>Coimbatore Branch</option>
-                    <option>Madurai Regional Hub</option>
-                    <option>Karur Office</option>
-                    <option>All Branches</option>
+                    {branches.map((b) => (
+                      <option key={b.id} value={b.name}>{b.name}</option>
+                    ))}
+                    <option value="All Branches">All Branches</option>
                   </select>
                 ) : (
                   <p className="text-sm font-bold text-veyra-text">{branchName}</p>

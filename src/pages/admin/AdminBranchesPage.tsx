@@ -39,61 +39,8 @@ const TAMIL_NADU_PRESETS = [
 export const AdminBranchesPage: React.FC = () => {
   const { branches: globalBranches, createCompanyBranch, deleteCompanyBranch, employees } = useData();
 
-  const [branches, setBranches] = useState<Branch[]>(() => {
-    const saved = localStorage.getItem('veyra_branches_data');
-    if (saved) {
-      try {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
-      } catch (e) {
-        console.warn('Branch parse notice:', e);
-      }
-    }
-    return [
-      {
-        id: 'br_01',
-        company_id: 'comp_veyra_tn',
-        name: 'Chennai Corporate HQ',
-        code: 'VEY-MAA-01',
-        city: 'Chennai',
-        state: 'Tamil Nadu',
-        address: 'VeyraHR Tech Tower, OMR IT Corridor, Perungudi, Chennai - 600096',
-        latitude: 12.9654,
-        longitude: 80.2461,
-        radius_meters: 150,
-        working_hours: '09:00 AM - 06:00 PM',
-        is_headquarters: true,
-      },
-      {
-        id: 'br_02',
-        company_id: 'comp_veyra_tn',
-        name: 'Coimbatore Regional Office',
-        code: 'VEY-CJB-02',
-        city: 'Coimbatore',
-        state: 'Tamil Nadu',
-        address: 'Cross Cut Road, Gandhipuram, Coimbatore - 641012',
-        latitude: 11.0168,
-        longitude: 76.9558,
-        radius_meters: 200,
-        working_hours: '09:00 AM - 06:00 PM',
-        is_headquarters: false,
-      },
-      {
-        id: 'br_03',
-        company_id: 'comp_veyra_tn',
-        name: 'Madurai Branch',
-        code: 'VEY-IXM-03',
-        city: 'Madurai',
-        state: 'Tamil Nadu',
-        address: '80 Feet Road, KK Nagar East, Madurai - 625020',
-        latitude: 9.9252,
-        longitude: 78.1198,
-        radius_meters: 200,
-        working_hours: '09:00 AM - 06:00 PM',
-        is_headquarters: false,
-      },
-    ];
-  });
+  // Use the global branches from context (synced with Supabase) as the single source of truth
+  const branches = globalBranches;
 
   const [search, setSearch] = useState('');
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
@@ -180,8 +127,8 @@ export const AdminBranchesPage: React.FC = () => {
     e.preventDefault();
     if (!newBranchName || !newCity) return;
 
-    const created: Branch = {
-      id: 'br_' + Date.now(),
+    // createCompanyBranch updates the global context state and persists to Supabase
+    await createCompanyBranch({
       company_id: 'comp_veyra_tn',
       name: newBranchName,
       code: newBranchCode || `VEY-${newCity.substring(0, 3).toUpperCase()}-${Math.floor(10 + Math.random() * 90)}`,
@@ -193,14 +140,8 @@ export const AdminBranchesPage: React.FC = () => {
       radius_meters: parseInt(newRadius) || 150,
       working_hours: newWorkingHours,
       is_headquarters: isHq,
-    };
+    });
 
-    const updated = [created, ...branches];
-    setBranches(updated);
-    localStorage.setItem('veyra_branches_data', JSON.stringify(updated));
-    if (createCompanyBranch) {
-      await createCompanyBranch(created);
-    }
     setIsAddModalOpen(false);
 
     // Reset Form
@@ -212,12 +153,7 @@ export const AdminBranchesPage: React.FC = () => {
   };
 
   const handleDeleteBranch = async (id: string) => {
-    const updated = branches.filter((b) => b.id !== id);
-    setBranches(updated);
-    localStorage.setItem('veyra_branches_data', JSON.stringify(updated));
-    if (deleteCompanyBranch) {
-      await deleteCompanyBranch(id);
-    }
+    await deleteCompanyBranch(id);
   };
 
   // Calculate distance between user current GPS and branch location
