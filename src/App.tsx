@@ -30,6 +30,8 @@ import { HRReports } from './pages/hr/HRReports';
 import { HRProfilePage } from './pages/hr/HRProfilePage';
 import { HRKioskManagement } from './pages/hr/HRKioskManagement';
 import { HRDepartmentsRoles } from './pages/hr/HRDepartmentsRoles';
+import { HRDocumentsPage } from './pages/hr/HRDocumentsPage';
+import { HRPayrollManagement } from './pages/hr/HRPayrollManagement';
 
 import { EmployeeLayout } from './components/layout/EmployeeLayout';
 import { EmployeeHome } from './pages/employee/EmployeeHome';
@@ -164,6 +166,8 @@ const AppRoutes: React.FC = () => {
           <Route index element={<Navigate to="/hr/dashboard" replace />} />
           <Route path="dashboard" element={<HRDashboardWrapper />} />
           <Route path="employees" element={<HREmployees />} />
+          <Route path="documents" element={<HRDocumentsPage />} />
+          <Route path="payroll" element={<HRPayrollManagement />} />
           <Route path="departments" element={<HRDepartmentsRoles />} />
           <Route path="attendance" element={<HRLiveAttendance />} />
           <Route path="leave" element={<HRLeaveManagement />} />

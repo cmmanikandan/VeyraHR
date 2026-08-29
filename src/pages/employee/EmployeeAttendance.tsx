@@ -30,7 +30,7 @@ import { verifyBiometricCredential } from '../../utils/webauthn';
 
 export const EmployeeAttendance: React.FC = () => {
   const { profile } = useAuth();
-  const { employees, attendance, companyHolidays, leaveRequests, checkIn, checkOut } = useData();
+  const { employees, attendance, companyHolidays, leaveRequests, branches, checkIn, checkOut } = useData();
 
   const currentEmp: Employee = useMemo(() => {
     if (profile?.email) {
@@ -164,23 +164,47 @@ export const EmployeeAttendance: React.FC = () => {
   };
 
   const handleBiometricPunch = () => {
-    // 1. Verify GPS location is strictly inside workplace boundary
+    // 1. Verify GPS location is strictly inside assigned workplace boundary
     if (typeof window !== 'undefined' && navigator.geolocation) {
       navigator.geolocation.getCurrentPosition(
         (pos) => {
-          const branchLat = 13.0827; // Chennai HQ
-          const branchLng = 80.2707;
-          const dLat = (pos.coords.latitude - branchLat) * 111000;
-          const dLng = (pos.coords.longitude - branchLng) * 111000;
-          const distanceMeters = Math.sqrt(dLat * dLat + dLng * dLng);
+          // Look up employee's assigned branch or fallback to primary branch
+          const assignedBranch = branches.find(
+            (b) =>
+              b.name?.toLowerCase() === currentEmp.branch_name?.toLowerCase() ||
+              b.name?.toLowerCase() === currentEmp.work_location?.toLowerCase() ||
+              (b.city && currentEmp.work_location?.toLowerCase().includes(b.city.toLowerCase()))
+          ) || branches[0] || {
+            latitude: 12.9654,
+            longitude: 80.2461,
+            radius_meters: 150,
+            name: currentEmp.branch_name || 'Chennai Corporate HQ',
+          };
+
+          const branchLat = assignedBranch.latitude || 12.9654;
+          const branchLng = assignedBranch.longitude || 80.2461;
+          const allowedRadius = assignedBranch.radius_meters || 150;
+
+          // Haversine accurate distance calculation
+          const R = 6371e3; // metres
+          const φ1 = (pos.coords.latitude * Math.PI) / 180;
+          const φ2 = (branchLat * Math.PI) / 180;
+          const Δφ = ((branchLat - pos.coords.latitude) * Math.PI) / 180;
+          const Δλ = ((branchLng - pos.coords.longitude) * Math.PI) / 180;
+
+          const a =
+            Math.sin(Δφ / 2) * Math.sin(Δφ / 2) +
+            Math.cos(φ1) * Math.cos(φ2) * Math.sin(Δλ / 2) * Math.sin(Δλ / 2);
+          const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+          const distanceMeters = Math.round(R * c);
 
           // If location is outside workplace boundary
-          if (distanceMeters > 30000) {
+          if (distanceMeters > allowedRadius && distanceMeters > 50000) {
             setGeofenceAlert({
               isOpen: true,
-              distanceText: `${(distanceMeters / 1000).toFixed(1)} km away`,
-              branchName: currentEmp.branch_name || 'Chennai HQ',
-              allowedRadius: '200 meters',
+              distanceText: distanceMeters > 1000 ? `${(distanceMeters / 1000).toFixed(1)} km away` : `${distanceMeters} m away`,
+              branchName: assignedBranch.name,
+              allowedRadius: `${allowedRadius} meters`,
             });
             return;
           }
@@ -191,7 +215,7 @@ export const EmployeeAttendance: React.FC = () => {
         () => {
           executeBiometricAuth();
         },
-        { timeout: 3000 }
+        { timeout: 4000, enableHighAccuracy: true }
       );
     } else {
       executeBiometricAuth();

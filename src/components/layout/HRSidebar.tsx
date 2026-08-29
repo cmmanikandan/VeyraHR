@@ -46,7 +46,9 @@ export const HRSidebar: React.FC<HRSidebarProps> = ({
   const navItems = [
     { label: 'Dashboard Overview', path: '/hr/dashboard', icon: LayoutDashboard },
     { label: 'Employee Directory', path: '/hr/employees', icon: Users },
-    { label: 'Departments & Roles', path: '/hr/departments', icon: Briefcase },
+    { label: 'Document Repository', path: '/hr/documents', icon: FileSpreadsheet },
+    { label: 'Payroll & Compensation', path: '/hr/payroll', icon: Briefcase },
+    { label: 'Departments & Roles', path: '/hr/departments', icon: Layers },
     { label: 'Live Attendance Stream', path: '/hr/attendance', icon: Clock },
     { label: 'Leave Approvals', path: '/hr/leave', icon: Calendar },
     { label: 'Shift Roster Manager', path: '/hr/shifts', icon: Layers },

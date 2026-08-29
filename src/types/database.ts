@@ -126,12 +126,19 @@ export interface Branch {
   id: string;
   company_id: string;
   name: string;
+  code?: string;
   district?: string;
   city?: string;
+  state?: string;
   address?: string;
   pincode?: string;
   manager?: string;
   country?: string;
+  latitude?: number;
+  longitude?: number;
+  radius_meters?: number;
+  working_hours?: string;
+  is_headquarters?: boolean;
 }
 
 export interface Employee {
