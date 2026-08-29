@@ -51,7 +51,10 @@ export const HRDashboard: React.FC<HRDashboardProps> = ({ onNavigate }) => {
   const trendData = useMemo(() => {
     const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'];
     return days.map((day, idx) => {
-      const p = Math.max(1, activePresentCount - (4 - idx) * 0.5);
+      if (totalEmp === 0) {
+        return { day, present: 0, late: 0 };
+      }
+      const p = Math.max(0, activePresentCount - (4 - idx) * 0.5);
       const l = Math.max(0, lateCount);
       return {
         day,
@@ -59,7 +62,7 @@ export const HRDashboard: React.FC<HRDashboardProps> = ({ onNavigate }) => {
         late: l,
       };
     });
-  }, [activePresentCount, lateCount]);
+  }, [totalEmp, activePresentCount, lateCount]);
 
   // Mood Score Calculation
   const moodScore = useMemo(() => {
