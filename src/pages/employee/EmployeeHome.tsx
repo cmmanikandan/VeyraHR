@@ -857,6 +857,9 @@ export const EmployeeHome: React.FC<EmployeeHomeProps> = ({ onNavigate }) => {
           onClose={() => setIsQrOpen(false)}
           actionType={qrAction}
           employeeName={`${currentEmp.first_name} ${currentEmp.last_name}`}
+          employeeId={currentEmp.employee_id || currentEmp.id}
+          branchId={branches[0]?.id || 'b1'}
+          branchName={currentEmp.branch_name || branches[0]?.name || 'Chennai HQ'}
           onConfirmAttendance={async (loc, method) => {
             if (qrAction === 'check_in') {
               await checkIn(currentEmp.id, loc, method);

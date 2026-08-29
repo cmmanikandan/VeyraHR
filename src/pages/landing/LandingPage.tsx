@@ -90,14 +90,14 @@ export const LandingPage: React.FC = () => {
   ];
 
   return (
-    <div className="min-h-screen bg-[#FCFAF7] text-[#172033] flex flex-col font-sans selection:bg-blue-100 selection:text-blue-700">
+    <div className="min-h-screen bg-[#FCFAF7] text-[#172033] flex flex-col font-sans selection:bg-blue-100 selection:text-blue-700 overflow-x-hidden">
       {/* FLOATING WHITE NAVBAR */}
-      <header className="sticky top-4 z-40 max-w-7xl mx-auto px-4 sm:px-6 w-full">
-        <div className="bg-white/90 backdrop-blur-md rounded-2xl border border-veyra-border shadow-sm px-4 sm:px-6 h-16 flex items-center justify-between">
+      <header className="sticky top-0 z-40 w-full px-3 sm:px-4 lg:px-6 py-2 sm:py-3">
+        <div className="max-w-7xl mx-auto bg-white/90 backdrop-blur-md rounded-2xl border border-veyra-border shadow-sm px-3 sm:px-6 h-14 sm:h-16 flex items-center justify-between">
           {/* Left: Logo & Wordmark */}
           <VeyraBrandHeader size="md" onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })} />
 
-          {/* Center Links */}
+          {/* Center Links (hidden on mobile) */}
           <nav className="hidden md:flex items-center gap-8 text-xs font-semibold text-veyra-text-sub">
             <a href="#platform" className="hover:text-veyra-blue transition-colors">Platform</a>
             <a href="#features" className="hover:text-veyra-blue transition-colors">Features</a>
@@ -110,7 +110,7 @@ export const LandingPage: React.FC = () => {
           <div className="flex items-center gap-2">
             {profile ? (
               <Button variant="primary" size="sm" onClick={() => handleEnterApp()} icon={<ArrowRight className="w-4 h-4" />}>
-                Go to App Dashboard
+                Go to Dashboard
               </Button>
             ) : (
               <>

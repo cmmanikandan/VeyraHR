@@ -185,100 +185,118 @@ export const KioskPage: React.FC = () => {
     } catch {}
   };
 
-  // ─── ULTRA-FAST HIGH-PRECISION DUAL OPTICAL SCANNER ─────────────────────
+  // ─── KIOSK QR PROCESSOR: Only accepts valid VEYRA-QR-AUTH:branchId:... tokens ───
   const processDecodedString = async (rawCode: string) => {
     if (isCooldownRef.current) return;
     isCooldownRef.current = true;
 
     const clean = rawCode.trim();
-    let matchedEmp: Employee | undefined;
 
-    // 1. Try parsing JSON payload
-    try {
-      const parsed = JSON.parse(clean);
-      if (parsed.employee) {
-        matchedEmp = employees.find(
-          (e) => `${e.first_name} ${e.last_name}`.toLowerCase() === parsed.employee.toLowerCase() ||
-                 e.first_name.toLowerCase().includes(parsed.employee.toLowerCase()) ||
-                 parsed.employee.toLowerCase().includes(e.first_name.toLowerCase())
-        );
-      }
-      if (!matchedEmp && parsed.employee_id) {
-        matchedEmp = employees.find(
-          (e) => (e.employee_id && e.employee_id.toLowerCase() === parsed.employee_id.toLowerCase()) || e.id === parsed.employee_id
-        );
-      }
-      if (!matchedEmp && parsed.id) {
-        matchedEmp = employees.find((e) => e.id === parsed.id || e.employee_id === parsed.id);
-      }
-    } catch {
-      // 2. Direct string matching (ID, employee_id, email, or URL params)
-      const lower = clean.toLowerCase();
-      matchedEmp = employees.find((e) => {
-        return (
-          e.id.toLowerCase() === lower ||
-          (e.employee_id && e.employee_id.toLowerCase() === lower) ||
-          (e.email && e.email.toLowerCase() === lower) ||
-          lower.includes(e.id.toLowerCase()) ||
-          (e.employee_id && lower.includes(e.employee_id.toLowerCase())) ||
-          lower.includes(e.first_name.toLowerCase())
-        );
-      });
-    }
-
-    if (matchedEmp) {
-      setKioskScanError(null);
-      playSuccessChime();
-
-      // Check if employee is already checked in today -> Toggle to Check Out
-      const isCurrentlyCheckedIn = checkedInSet.has(matchedEmp.id);
-      let actionText: 'Checked In (Present)' | 'Checked Out' = 'Checked In (Present)';
-
-      if (isCurrentlyCheckedIn) {
-        // Toggle to Check-Out
-        setCheckedInSet((prev) => {
-          const next = new Set(prev);
-          next.delete(matchedEmp!.id);
-          return next;
-        });
-        await checkOut(matchedEmp.id, activeBranch.name);
-        actionText = 'Checked Out';
-      } else {
-        // Toggle to Check-In
-        setCheckedInSet((prev) => {
-          const next = new Set(prev);
-          next.add(matchedEmp!.id);
-          return next;
-        });
-        await checkIn(matchedEmp.id, activeBranch.name, 'Kiosk Optical Scanner');
-        actionText = 'Checked In (Present)';
-      }
-
-      setVerifiedEmployee({
-        name: `${matchedEmp.first_name} ${matchedEmp.last_name}`,
-        avatar: matchedEmp.avatar_url || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150',
-        designation: matchedEmp.designation || 'Software Specialist',
-        action: actionText,
-        time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
-      });
-
-      // Celebration overlay for 3s then reset cooldown
-      setTimeout(() => {
-        setVerifiedEmployee(null);
-        isCooldownRef.current = false;
-      }, 3000);
-    } else {
+    // STRICT VALIDATION: Only process VeyraHR attendance tokens
+    // Format: VEYRA-QR-AUTH:<branchId>:<branchName>:<timestamp>:<randomSuffix>
+    if (!clean.startsWith('VEYRA-QR-AUTH:')) {
       playErrorChime();
       setKioskScanError({
-        message: 'Unrecognized QR / ID badge',
+        message: 'Invalid QR Code — Only VeyraHR attendance tokens are accepted.',
         payload: clean.length > 40 ? clean.substring(0, 40) + '...' : clean,
       });
-      
       setTimeout(() => {
         setKioskScanError(null);
         isCooldownRef.current = false;
       }, 2500);
+      return;
     }
+
+    // Parse: VEYRA-QR-AUTH:<branchId>:<branchName>:<timestamp>:<suffix>:<employeeId>
+    const parts = clean.split(':');
+    // parts[0] = VEYRA-QR-AUTH
+    // parts[1] = branchId  (e.g. "b1")
+    // parts[2] = branchName
+    // parts[3] = timestamp
+    // parts[4] = random suffix
+    // parts[5] = employeeId (optional — set by employee mobile app)
+    const tokenBranchId = parts[1] || '';
+    const tokenEmployeeId = parts[5] || '';
+    const tokenTimestamp = parseInt(parts[3] || '0', 10);
+
+    // Validate token freshness (max 35 seconds old)
+    const ageMs = Date.now() - tokenTimestamp;
+    if (tokenTimestamp > 0 && ageMs > 35000) {
+      playErrorChime();
+      setKioskScanError({
+        message: 'Expired QR Token — Please refresh the QR code on your device.',
+        payload: `Token age: ${Math.floor(ageMs / 1000)}s`,
+      });
+      setTimeout(() => {
+        setKioskScanError(null);
+        isCooldownRef.current = false;
+      }, 3000);
+      return;
+    }
+
+    // Find the employee by the ID embedded in the QR token
+    let matchedEmp: Employee | undefined;
+    if (tokenEmployeeId) {
+      matchedEmp = employees.find(
+        (e) => e.id === tokenEmployeeId ||
+               (e.employee_id && e.employee_id.toLowerCase() === tokenEmployeeId.toLowerCase())
+      );
+    }
+
+    if (!matchedEmp) {
+      playErrorChime();
+      setKioskScanError({
+        message: 'Employee not found. Please contact HR.',
+        payload: tokenEmployeeId || 'No employee ID in token',
+      });
+      setTimeout(() => {
+        setKioskScanError(null);
+        isCooldownRef.current = false;
+      }, 3000);
+      return;
+    }
+
+    setKioskScanError(null);
+    playSuccessChime();
+
+    // Check if employee is already checked in today -> Toggle to Check Out
+    const isCurrentlyCheckedIn = checkedInSet.has(matchedEmp.id);
+    let actionText: 'Checked In (Present)' | 'Checked Out' = 'Checked In (Present)';
+
+    const branchForRecord = tokenBranchId
+      ? (branches.find((b) => b.id === tokenBranchId)?.name || activeBranch.name)
+      : activeBranch.name;
+
+    if (isCurrentlyCheckedIn) {
+      setCheckedInSet((prev) => {
+        const next = new Set(prev);
+        next.delete(matchedEmp!.id);
+        return next;
+      });
+      await checkOut(matchedEmp.id, branchForRecord);
+      actionText = 'Checked Out';
+    } else {
+      setCheckedInSet((prev) => {
+        const next = new Set(prev);
+        next.add(matchedEmp!.id);
+        return next;
+      });
+      await checkIn(matchedEmp.id, branchForRecord, 'QR Kiosk Scanner');
+      actionText = 'Checked In (Present)';
+    }
+
+    setVerifiedEmployee({
+      name: `${matchedEmp.first_name} ${matchedEmp.last_name}`,
+      avatar: matchedEmp.avatar_url || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150',
+      designation: matchedEmp.designation || 'Software Specialist',
+      action: actionText,
+      time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
+    });
+
+    setTimeout(() => {
+      setVerifiedEmployee(null);
+      isCooldownRef.current = false;
+    }, 3000);
   };
 
   // Start continuous high-frequency optical camera stream for the Kiosk

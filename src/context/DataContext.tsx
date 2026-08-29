@@ -381,6 +381,40 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     refreshData();
   }, [refreshData]);
 
+  // ── SUPABASE REALTIME: Live attendance push (no manual refresh needed) ──
+  useEffect(() => {
+    const channel = supabase
+      .channel('veyra-attendance-live')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'attendance' },
+        (payload) => {
+          const record = payload.new as AttendanceRecord;
+          if (!record?.id) return;
+          setAttendance((prev) => {
+            const idx = prev.findIndex((a) => a.id === record.id);
+            if (idx !== -1) {
+              // UPDATE existing record
+              const updated = [...prev];
+              updated[idx] = { ...updated[idx], ...record };
+              try { localStorage.setItem('veyra_attendance', JSON.stringify(updated)); } catch {}
+              return updated;
+            } else {
+              // INSERT new record
+              const updated = [record, ...prev];
+              try { localStorage.setItem('veyra_attendance', JSON.stringify(updated)); } catch {}
+              return updated;
+            }
+          });
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, []);
+
   // HR Manager Actions
   const addHRManager = async (hr: Omit<HRManager, 'id' | 'created_at'>): Promise<HRManager> => {
     const newHR: HRManager = {

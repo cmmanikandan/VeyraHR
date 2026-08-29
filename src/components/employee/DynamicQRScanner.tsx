@@ -26,6 +26,9 @@ interface DynamicQRScannerProps {
   onConfirmAttendance: (location: string, method: string) => void;
   actionType: 'check_in' | 'check_out';
   employeeName: string;
+  employeeId?: string;
+  branchId?: string;
+  branchName?: string;
 }
 
 export const DynamicQRScanner: React.FC<DynamicQRScannerProps> = ({
@@ -34,6 +37,9 @@ export const DynamicQRScanner: React.FC<DynamicQRScannerProps> = ({
   onConfirmAttendance,
   actionType,
   employeeName,
+  employeeId = '',
+  branchId = 'b1',
+  branchName = 'Chennai HQ',
 }) => {
   const [activeTab, setActiveTab] = useState<'scan_camera' | 'scan_face' | 'show_token'>('scan_camera');
   const [tokenNonce, setTokenNonce] = useState(Date.now().toString());
@@ -403,14 +409,14 @@ export const DynamicQRScanner: React.FC<DynamicQRScannerProps> = ({
           <div className="space-y-3 text-center">
             <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200 inline-block shadow-inner">
               <QRCodeSVG
-                value={JSON.stringify({ app: 'VeyraHR', employee: employeeName, type: actionType, nonce: tokenNonce })}
+                value={`VEYRA-QR-AUTH:${branchId}:${branchName}:${Date.now()}:${tokenNonce}:${employeeId}`}
                 size={180}
                 level="H"
                 includeMargin
               />
             </div>
             <p className="text-xs text-slate-500">
-              Hold this dynamic token in front of the office kiosk front camera to verify.
+              Hold this dynamic token in front of the office kiosk camera to verify. Refreshes every 30s.
             </p>
           </div>
         )}
