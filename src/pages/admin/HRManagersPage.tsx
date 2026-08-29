@@ -25,8 +25,6 @@ import { Modal } from '../../components/ui/Modal';
 import { EmptyState } from '../../components/common/EmptyState';
 import { useData } from '../../context/DataContext';
 import { HRManager } from '../../types/database';
-import { createUserWithEmailAndPassword, sendEmailVerification } from 'firebase/auth';
-import { auth } from '../../lib/firebase';
 
 export const HRManagersPage: React.FC = () => {
   const { hrManagers, branches, departments, addHRManager, updateHRManagerStatus, deleteHRManager } = useData();
@@ -70,18 +68,10 @@ export const HRManagersPage: React.FC = () => {
     setError(null);
 
     try {
-      // 1. Create Firebase Account
-      try {
-        const userCred = await createUserWithEmailAndPassword(auth, workEmail.trim(), password);
-        await sendEmailVerification(userCred.user);
-      } catch (fbErr: any) {
-        console.warn('Firebase user creation notice:', fbErr);
-      }
-
-      // 2. Add HR Manager to Context State & Supabase
+      // Add HR Manager to Context State & Supabase (including secure local auth password)
       await addHRManager({
         full_name: fullName.trim(),
-        email: workEmail.trim(),
+        email: workEmail.trim().toLowerCase(),
         phone: mobile.trim(),
         branch_name: selectedBranch,
         department_access: deptAccess,
@@ -89,6 +79,7 @@ export const HRManagersPage: React.FC = () => {
         status: 'Active',
         last_login: 'Never',
         avatar_url: `https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80`,
+        ...({ password: password.trim() } as any),
       });
 
       // Reset form

@@ -698,31 +698,80 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       id: `hr_${Date.now()}`,
       created_at: new Date().toISOString(),
     };
+
+    setHrManagers((prev) => {
+      const updated = [newHR, ...prev];
+      try {
+        localStorage.setItem('veyra_hr_managers', JSON.stringify(updated));
+      } catch (err) {
+        console.warn('LocalStorage save error:', err);
+      }
+      return updated;
+    });
+
+    // Sync to Supabase profiles & hr_managers
     try {
-      await supabase.from('hr_managers').insert(newHR);
+      await supabase.from('profiles').upsert({
+        id: newHR.id,
+        company_id: newHR.company_id || 'comp_veyra_tn',
+        full_name: newHR.full_name,
+        email: newHR.email,
+        phone: newHR.phone,
+        role: 'hr_manager',
+        branch_name: newHR.branch_name,
+        department_access: newHR.department_access,
+        status: newHR.status || 'Active',
+      });
+      await supabase.from('hr_managers').upsert(newHR);
     } catch (e) {
-      console.warn('HR Manager sync:', e);
+      console.warn('HR Manager Supabase sync notice:', e);
     }
-    setHrManagers((prev) => [newHR, ...prev]);
+
+    setAuditLogs((prev) => [
+      {
+        id: `aud_${Date.now()}`,
+        company_id: newHR.company_id || 'comp_veyra_tn',
+        actor_name: 'Master Administrator',
+        action: 'HR_MANAGER_CREATED',
+        details: `Granted HR Management permissions for ${newHR.full_name} (${newHR.email}) at ${newHR.branch_name}`,
+        created_at: new Date().toISOString(),
+      },
+      ...prev,
+    ]);
+
     return newHR;
   };
 
   const updateHRManagerStatus = async (id: string, status: 'Active' | 'Inactive') => {
     try {
+      await supabase.from('profiles').update({ status }).eq('id', id);
       await supabase.from('hr_managers').update({ status }).eq('id', id);
     } catch (e) {
-      console.warn('HR Manager status sync:', e);
+      console.warn('HR status sync:', e);
     }
-    setHrManagers((prev) => prev.map((h) => (h.id === id ? { ...h, status } : h)));
+    setHrManagers((prev) => {
+      const updated = prev.map((h) => (h.id === id ? { ...h, status } : h));
+      try {
+        localStorage.setItem('veyra_hr_managers', JSON.stringify(updated));
+      } catch {}
+      return updated;
+    });
   };
 
   const deleteHRManager = async (id: string) => {
     try {
+      await supabase.from('profiles').delete().eq('id', id);
       await supabase.from('hr_managers').delete().eq('id', id);
     } catch (e) {
-      console.warn('HR Manager delete sync:', e);
+      console.warn('HR delete sync:', e);
     }
-    setHrManagers((prev) => prev.filter((h) => h.id !== id));
+    setHrManagers((prev) => {
+      const updated = prev.filter((h) => h.id !== id);
+      try {
+        localStorage.setItem('veyra_hr_managers', JSON.stringify(updated));
+      } catch {}
+      return updated;
+    });
   };
 
   const forceLogoutSession = async (sessionId: string) => {
