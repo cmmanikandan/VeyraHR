@@ -29,7 +29,7 @@ import { Modal } from '../../components/ui/Modal';
 import { Avatar } from '../../components/ui/Avatar';
 import { EmptyState } from '../../components/common/EmptyState';
 import { useData } from '../../context/DataContext';
-import { Employee } from '../../types/database';
+import { Employee, EmployeeDocument } from '../../types/database';
 
 export interface EmployeeDocRecord {
   id: string;
@@ -50,7 +50,7 @@ const DEFAULT_DOC_TEMPLATES: Record<string, EmployeeDocRecord[]> = {
 };
 
 export const HRDocumentsPage: React.FC = () => {
-  const { employees, branches } = useData();
+  const { employees, branches, documents, uploadDocument } = useData();
 
   const [selectedEmployee, setSelectedEmployee] = useState<Employee | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
@@ -58,54 +58,29 @@ export const HRDocumentsPage: React.FC = () => {
   const [selectedBranch, setSelectedBranch] = useState<string>('All');
 
   // Preview & Upload Modals
-  const [viewingDoc, setViewingDoc] = useState<EmployeeDocRecord | null>(null);
+  const [viewingDoc, setViewingDoc] = useState<EmployeeDocument | null>(null);
   const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
 
   // Form State
   const [newTitle, setNewTitle] = useState('');
-  const [newCategory, setNewCategory] = useState<EmployeeDocRecord['category']>('Identity');
+  const [newCategory, setNewCategory] = useState<EmployeeDocument['category']>('Identity');
   const [newDocNumber, setNewDocNumber] = useState('');
   const [newFileName, setNewFileName] = useState('');
 
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
 
-  // Storage for all employees documents
-  const [docsMap, setDocsMap] = useState<Record<string, EmployeeDocRecord[]>>(() => {
-    try {
-      const saved = localStorage.getItem('veyra_hr_employee_docs');
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (parsed && typeof parsed === 'object') return parsed;
-      }
-    } catch {}
-    return {};
-  });
-
-  const getEmployeeDocs = (empId: string): EmployeeDocRecord[] => {
-    if (docsMap[empId]) return docsMap[empId];
-    // Check if employee has custom localstorage docs
-    const savedEmpDocs = localStorage.getItem(`veyra_docs_${empId}`);
-    if (savedEmpDocs) {
-      try {
-        const parsed = JSON.parse(savedEmpDocs);
-        if (Array.isArray(parsed) && !parsed.some(d => d.id?.includes('doc_id_') || d.title?.includes('Aadhaar Card (National ID)'))) {
-          return parsed;
-        }
-      } catch {}
-    }
-    return [];
+  const getEmployeeDocs = (empId: string): EmployeeDocument[] => {
+    return (documents || []).filter((d) => d.employee_id === empId);
   };
 
-  const handleUpdateDocStatus = (docId: string, status: 'Verified' | 'Rejected') => {
+  const handleUpdateDocStatus = async (docId: string, status: 'Verified' | 'Rejected') => {
     if (!selectedEmployee) return;
-    const currentList = getEmployeeDocs(selectedEmployee.id);
-    const updated = currentList.map((d) => (d.id === docId ? { ...d, status } : d));
-    const nextMap = { ...docsMap, [selectedEmployee.id]: updated };
-    setDocsMap(nextMap);
-    localStorage.setItem('veyra_hr_employee_docs', JSON.stringify(nextMap));
-    localStorage.setItem(`veyra_docs_${selectedEmployee.id}`, JSON.stringify(updated));
+    const doc = (documents || []).find((d) => d.id === docId);
+    if (!doc) return;
+    const updated = { ...doc, status: status as any };
+    await uploadDocument(updated);
     if (viewingDoc && viewingDoc.id === docId) {
-      setViewingDoc({ ...viewingDoc, status });
+      setViewingDoc(updated);
     }
   };
 
@@ -117,31 +92,39 @@ export const HRDocumentsPage: React.FC = () => {
       ? `${(selectedFile.size / (1024 * 1024)).toFixed(2)} MB`
       : '1.2 MB';
 
-    const newDoc: EmployeeDocRecord = {
-      id: `doc_${Date.now()}`,
-      employee_id: selectedEmployee.id,
-      category: newCategory,
-      title: newTitle,
-      doc_number: newDocNumber || undefined,
-      file_name: newFileName || selectedFile?.name || `${newTitle.replace(/\s+/g, '_')}.pdf`,
-      file_size: realSize,
-      issued_date: new Date().toISOString().split('T')[0],
-      status: 'Verified',
-      verification_hash: `HR-UPLOAD-${Math.random().toString(36).substring(2, 8).toUpperCase()}`,
+    const performUpload = async (fileDataUrl?: string) => {
+      const newDoc: EmployeeDocument = {
+        id: `doc_${Date.now()}`,
+        employee_id: selectedEmployee.id,
+        category: newCategory,
+        title: newTitle,
+        doc_number: newDocNumber || undefined,
+        file_name: newFileName || selectedFile?.name || `${newTitle.replace(/\s+/g, '_')}.pdf`,
+        file_size: realSize,
+        issued_date: new Date().toISOString().split('T')[0],
+        status: 'Verified',
+        verification_hash: `HR-UPLOAD-${Math.random().toString(36).substring(2, 8).toUpperCase()}`,
+        custom_image_url: fileDataUrl,
+      };
+
+      await uploadDocument(newDoc);
+
+      setIsUploadModalOpen(false);
+      setSelectedFile(null);
+      setNewTitle('');
+      setNewDocNumber('');
+      setNewFileName('');
     };
 
-    const currentList = getEmployeeDocs(selectedEmployee.id);
-    const updated = [newDoc, ...currentList];
-    const nextMap = { ...docsMap, [selectedEmployee.id]: updated };
-    setDocsMap(nextMap);
-    localStorage.setItem('veyra_hr_employee_docs', JSON.stringify(nextMap));
-    localStorage.setItem(`veyra_docs_${selectedEmployee.id}`, JSON.stringify(updated));
-
-    setIsUploadModalOpen(false);
-    setSelectedFile(null);
-    setNewTitle('');
-    setNewDocNumber('');
-    setNewFileName('');
+    if (selectedFile) {
+      const reader = new FileReader();
+      reader.onload = () => {
+        performUpload(reader.result as string);
+      };
+      reader.readAsDataURL(selectedFile);
+    } else {
+      performUpload();
+    }
   };
 
   const filteredEmployees = useMemo(() => {
@@ -155,12 +138,40 @@ export const HRDocumentsPage: React.FC = () => {
     });
   }, [employees, searchQuery, selectedBranch]);
 
+  const handleDownload = (doc: EmployeeDocument) => {
+    if (doc.custom_image_url) {
+      const a = document.createElement('a');
+      a.href = doc.custom_image_url;
+      a.download = doc.file_name;
+      a.click();
+      return;
+    }
+
+    const content = `========================================================\n` +
+      `VEYRA HR DIGITAL VAULT - OFFICIAL DOCUMENT PROOF\n` +
+      `========================================================\n` +
+      `Document Title : ${doc.title}\n` +
+      `Category       : ${doc.category}\n` +
+      `Document ID    : ${doc.doc_number || 'N/A'}\n` +
+      `Issued Date    : ${doc.issued_date}\n` +
+      `Status         : ${doc.status}\n` +
+      `Cryptographic Hash: ${doc.verification_hash || 'SHA256-VERIFIED-OK'}\n` +
+      `========================================================\n`;
+    const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = doc.file_name;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
   const activeEmployeeDocs = useMemo(() => {
     if (!selectedEmployee) return [];
     const list = getEmployeeDocs(selectedEmployee.id);
     if (selectedCategory === 'All') return list;
     return list.filter((d) => d.category === selectedCategory);
-  }, [selectedEmployee, docsMap, selectedCategory]);
+  }, [selectedEmployee, documents, selectedCategory]);
 
   return (
     <div className="space-y-6 text-left max-w-7xl mx-auto">
@@ -441,24 +452,52 @@ export const HRDocumentsPage: React.FC = () => {
               </div>
             </div>
 
-            {/* Document Digital Frame Mock */}
-            <div className="w-full h-48 bg-slate-900 rounded-2xl border border-slate-800 flex flex-col items-center justify-center text-white p-6 text-center space-y-2">
-              <ShieldCheck className="w-10 h-10 text-emerald-400" />
-              <p className="text-sm font-bold">{viewingDoc.file_name}</p>
-              <span className="text-xs text-slate-400 font-mono">Encrypted Enterprise Document • Verified by VeyraHR Security</span>
-            </div>
+            {/* Document Digital Frame Mock or Actual Base64 Preview */}
+            {viewingDoc.custom_image_url ? (
+              viewingDoc.custom_image_url.startsWith('data:application/pdf') || viewingDoc.file_name.endsWith('.pdf') ? (
+                <div className="rounded-2xl overflow-hidden border border-slate-200 h-96 bg-black/5">
+                  <iframe
+                    src={viewingDoc.custom_image_url}
+                    title="PDF Document Proof"
+                    className="w-full h-full border-none"
+                  />
+                </div>
+              ) : (
+                <div className="rounded-2xl overflow-hidden border border-slate-200 max-h-[500px] flex items-center justify-center bg-black/5 p-2">
+                  <img 
+                    src={viewingDoc.custom_image_url} 
+                    alt="Proof" 
+                    className="max-w-full max-h-[460px] object-contain rounded-lg shadow-sm" 
+                  />
+                </div>
+              )
+            ) : (
+              <div className="w-full h-48 bg-slate-900 rounded-2xl border border-slate-800 flex flex-col items-center justify-center text-white p-6 text-center space-y-2">
+                <ShieldCheck className="w-10 h-10 text-emerald-400" />
+                <p className="text-sm font-bold">{viewingDoc.file_name}</p>
+                <span className="text-xs text-slate-400 font-mono">Encrypted Enterprise Document • Verified by VeyraHR Security</span>
+              </div>
+            )}
 
-            <div className="flex justify-end gap-2 pt-2">
-              <Button variant="outline" onClick={() => setViewingDoc(null)}>
+            <div className="flex gap-2 pt-2">
+              <Button variant="outline" className="flex-1" onClick={() => setViewingDoc(null)}>
                 Close
+              </Button>
+              <Button 
+                variant="primary" 
+                className="flex-1 font-bold" 
+                icon={<Download className="w-4 h-4" />} 
+                onClick={() => handleDownload(viewingDoc)}
+              >
+                Download
               </Button>
               {viewingDoc.status !== 'Verified' && (
                 <Button
-                  variant="primary"
+                  variant="success"
                   onClick={() => handleUpdateDocStatus(viewingDoc.id, 'Verified')}
-                  className="font-bold"
+                  className="font-bold flex-1"
                 >
-                  Confirm & Mark Verified
+                  Verify
                 </Button>
               )}
             </div>

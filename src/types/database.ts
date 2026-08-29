@@ -341,3 +341,18 @@ export interface OfflinePunch {
   method: string;
   queued_at: string;
 }
+
+export interface EmployeeDocument {
+  id: string;
+  employee_id: string;
+  category: 'Identity' | 'Employment' | 'Academic' | 'Financial';
+  title: string;
+  doc_number?: string;
+  file_name: string;
+  file_size: string;
+  issued_date: string;
+  expiry_date?: string;
+  status: 'Verified' | 'Pending' | 'Expiring Soon' | 'Rejected';
+  verification_hash?: string;
+  custom_image_url?: string;
+}

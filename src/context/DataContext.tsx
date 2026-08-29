@@ -16,7 +16,8 @@ import {
   Branch,
   HRManager,
   SecuritySession,
-  CompanyHoliday
+  CompanyHoliday,
+  EmployeeDocument
 } from '../types/database';
 import { supabase } from '../lib/supabase';
 import { getOfflineQueue, processOfflineQueue, enqueueOfflineAttendance } from '../lib/offlineQueue';
@@ -41,8 +42,11 @@ interface DataContextType {
   companyHolidays: CompanyHoliday[];
   isOffline: boolean;
   offlineQueueLength: number;
+  documents: EmployeeDocument[];
   
   // Actions
+  uploadDocument: (doc: EmployeeDocument) => Promise<void>;
+  deleteDocument: (docId: string) => Promise<void>;
   addEmployee: (emp: Omit<Employee, 'id' | 'employee_id'>) => Promise<Employee>;
   deleteEmployee: (id: string) => Promise<void>;
   addHRManager: (hr: Omit<HRManager, 'id' | 'created_at'>) => Promise<HRManager>;
@@ -239,6 +243,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   });
   const [auditLogs, setAuditLogs] = useState<AuditLog[]>([]);
+  const [documents, setDocuments] = useState<EmployeeDocument[]>([]);
   const [companyHolidays, setCompanyHolidays] = useState<CompanyHoliday[]>([
     { id: 'hol_1', company_id: 'comp_veyra_tn', name: 'Independence Day', holiday_date: '2026-08-15', is_optional: false },
     { id: 'hol_2', company_id: 'comp_veyra_tn', name: 'Ganesh Chaturthi', holiday_date: '2026-09-14', is_optional: false },
@@ -373,6 +378,15 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       // 12. Leave Balances
       const { data: balData } = await supabase.from('leave_balances').select('*');
       if (balData && balData.length > 0) setLeaveBalances(balData);
+
+      // 13. Documents Vault
+      const { data: docData, error: docErr } = await supabase
+        .from('documents')
+        .select('*')
+        .order('created_at', { ascending: false });
+      if (!docErr && docData) {
+        setDocuments(docData);
+      }
     } catch (err) {
       console.warn('Supabase sync notice:', err);
     }
@@ -898,6 +912,24 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     );
   };
 
+  const uploadDocument = async (doc: EmployeeDocument) => {
+    try {
+      await supabase.from('documents').upsert(doc);
+    } catch (e) {
+      console.warn('Document upload sync error:', e);
+    }
+    setDocuments((prev) => [doc, ...prev.filter((d) => d.id !== doc.id)]);
+  };
+
+  const deleteDocument = async (docId: string) => {
+    try {
+      await supabase.from('documents').delete().eq('id', docId);
+    } catch (e) {
+      console.warn('Document delete sync error:', e);
+    }
+    setDocuments((prev) => prev.filter((d) => d.id !== docId));
+  };
+
   const logMood = async (employeeId: string, mood: MoodLog['mood'], note?: string) => {
     const todayStr = new Date().toISOString().split('T')[0];
     const newMood: MoodLog = {
@@ -1155,6 +1187,9 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         companyHolidays,
         isOffline,
         offlineQueueLength,
+        documents,
+        uploadDocument,
+        deleteDocument,
         addEmployee,
         deleteEmployee,
         addHRManager,

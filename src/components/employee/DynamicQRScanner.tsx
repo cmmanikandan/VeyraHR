@@ -157,6 +157,19 @@ export const DynamicQRScanner: React.FC<DynamicQRScannerProps> = ({
   };
 
   const handleQrDetected = (qrData: string) => {
+    // If geofence is violated, block confirmation
+    const isGeofenceEnforced = localStorage.getItem('veyra_pref_geofence') !== 'false';
+    if (isGeofenceEnforced && geofenceViolation) {
+      setQrStatusText('Geofence Violation: Attendance punch blocked.');
+      // Restart loop
+      setTimeout(() => {
+        if (!scannedSuccess && activeTab === 'scan_camera') {
+          startQrFrameScanner();
+        }
+      }, 1500);
+      return;
+    }
+
     stopCamera();
     setScannedSuccess(true);
     setSuccessMethod('Optical QR Code Match');
@@ -327,7 +340,7 @@ export const DynamicQRScanner: React.FC<DynamicQRScannerProps> = ({
       setFaceAnalysisError('Geolocation is not supported. Attendance blocked.');
     }
 
-    if ((activeTab === 'scan_camera' || activeTab === 'scan_face') && !scannedSuccess && !geofenceViolation) {
+    if ((activeTab === 'scan_camera' || activeTab === 'scan_face') && !scannedSuccess) {
       setCameraLoading(true);
       const constraints: MediaStreamConstraints = {
         video: {
@@ -364,7 +377,7 @@ export const DynamicQRScanner: React.FC<DynamicQRScannerProps> = ({
     return () => {
       stopCamera();
     };
-  }, [isOpen, activeTab, facingMode, scannedSuccess, geofenceViolation]);
+  }, [isOpen, activeTab, facingMode, scannedSuccess]);
 
   const toggleCamera = () => {
     stopCamera();

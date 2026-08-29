@@ -31,29 +31,14 @@ import { Badge } from '../../components/ui/Badge';
 import { Modal } from '../../components/ui/Modal';
 import { useAuth } from '../../context/AuthContext';
 import { useData } from '../../context/DataContext';
-import { Employee } from '../../types/database';
-
-export interface EmployeeDocument {
-  id: string;
-  employee_id: string;
-  category: 'Identity' | 'Employment' | 'Academic' | 'Financial';
-  title: string;
-  doc_number?: string;
-  file_name: string;
-  file_size: string;
-  issued_date: string;
-  expiry_date?: string;
-  status: 'Verified' | 'Pending' | 'Expiring Soon';
-  verification_hash?: string;
-  custom_image_url?: string;
-}
+import { Employee, EmployeeDocument } from '../../types/database';
 
 const DEFAULT_DOCS: EmployeeDocument[] = [];
 
 export const EmployeeDocuments: React.FC = () => {
   const navigate = useNavigate();
   const { profile } = useAuth();
-  const { employees } = useData();
+  const { employees, documents: globalDocs, uploadDocument, deleteDocument } = useData();
 
   const currentEmp: Employee = useMemo(() => {
     if (profile?.email) {
@@ -69,14 +54,9 @@ export const EmployeeDocuments: React.FC = () => {
     };
   }, [employees, profile]);
 
-  const [documents, setDocuments] = useState<EmployeeDocument[]>(() => {
-    try {
-      const saved = localStorage.getItem(`veyra_docs_${currentEmp.id}`);
-      return saved ? JSON.parse(saved) : DEFAULT_DOCS;
-    } catch {
-      return DEFAULT_DOCS;
-    }
-  });
+  const documents = useMemo(() => {
+    return globalDocs.filter((d) => d.employee_id === currentEmp.id);
+  }, [globalDocs, currentEmp.id]);
 
   const [activeCategory, setActiveCategory] = useState<string>('All');
   const [searchQuery, setSearchQuery] = useState<string>('');
@@ -107,7 +87,7 @@ export const EmployeeDocuments: React.FC = () => {
     if (!newTitle) return;
     setIsUploading(true);
 
-    setTimeout(() => {
+    setTimeout(async () => {
       const newDoc: EmployeeDocument = {
         id: `doc_${Date.now()}`,
         employee_id: currentEmp.id,
@@ -122,11 +102,7 @@ export const EmployeeDocuments: React.FC = () => {
         custom_image_url: newCustomImage || undefined,
       };
 
-      const updated = [newDoc, ...documents];
-      setDocuments(updated);
-      try {
-        localStorage.setItem(`veyra_docs_${currentEmp.id}`, JSON.stringify(updated));
-      } catch {}
+      await uploadDocument(newDoc);
 
       setIsUploading(false);
       setIsUploadOpen(false);
@@ -137,12 +113,8 @@ export const EmployeeDocuments: React.FC = () => {
     }, 600);
   };
 
-  const handleDelete = (docId: string) => {
-    const updated = documents.filter((d) => d.id !== docId);
-    setDocuments(updated);
-    try {
-      localStorage.setItem(`veyra_docs_${currentEmp.id}`, JSON.stringify(updated));
-    } catch {}
+  const handleDelete = async (docId: string) => {
+    await deleteDocument(docId);
     setDeletingDocId(null);
     if (viewingDoc?.id === docId) {
       setViewingDoc(null);
