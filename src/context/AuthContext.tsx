@@ -120,27 +120,39 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
         setProfile(baseProfile);
 
-        // Sync from Supabase profiles table if it exists
+        // Sync from Supabase profiles and employees tables if they exist
         try {
           const { data: dbProfile } = await supabase
             .from('profiles')
             .select('*')
             .or(`id.eq.${user.uid},email.eq.${user.email}`)
-            .single();
+            .maybeSingle();
 
-          if (dbProfile) {
+          // Also check employees table to get exact assigned branch
+          const { data: dbEmp } = await supabase
+            .from('employees')
+            .select('*')
+            .or(`id.eq.${user.uid},profile_id.eq.${user.uid},email.ilike.${user.email}`)
+            .maybeSingle();
+
+          const resolvedBranch = dbEmp?.branch_name || dbEmp?.work_location || dbProfile?.branch_name || baseProfile.branch_name || 'Chennai HQ';
+          const resolvedDept = dbEmp?.department_name || dbProfile?.department_access || baseProfile.department_access || 'All Departments';
+
+          if (dbProfile || dbEmp) {
             const merged: Profile = {
               ...baseProfile,
-              full_name: dbProfile.full_name || baseProfile.full_name,
-              phone: dbProfile.phone || baseProfile.phone,
-              branch_name: dbProfile.branch_name || baseProfile.branch_name,
-              department_access: dbProfile.department_access || baseProfile.department_access,
-              role: (dbProfile.role as RoleType) || baseProfile.role,
-              avatar_url: dbProfile.avatar_url,
+              full_name: dbEmp ? `${dbEmp.first_name} ${dbEmp.last_name}` : (dbProfile?.full_name || baseProfile.full_name),
+              phone: dbEmp?.phone || dbProfile?.phone || baseProfile.phone,
+              branch_name: resolvedBranch,
+              department_access: resolvedDept,
+              role: (dbProfile?.role as RoleType) || baseProfile.role,
+              avatar_url: dbEmp?.avatar_url || dbProfile?.avatar_url || baseProfile.avatar_url,
             };
             setProfile(merged);
           }
-        } catch {}
+        } catch (syncErr) {
+          console.warn('AuthContext profile sync notice:', syncErr);
+        }
 
         setCompany((prev) => prev || {
           id: 'comp_veyra_tn',

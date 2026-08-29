@@ -33,41 +33,70 @@ export const EmployeeAttendance: React.FC = () => {
   const { employees, attendance, companyHolidays, leaveRequests, branches, checkIn, checkOut } = useData();
 
   const currentEmp: Employee = useMemo(() => {
+    let matchedEmp: Employee | undefined = undefined;
+
     if (profile?.email) {
-      const match = employees.find((e) => e.email?.toLowerCase() === profile.email.toLowerCase());
-      if (match) return match;
+      matchedEmp = employees.find((e) => e.email?.toLowerCase() === profile.email?.toLowerCase());
     }
-    if (profile?.full_name) {
-      const match = employees.find(
-        (e) => `${e.first_name || ''} ${e.last_name || ''}`.trim().toLowerCase() === profile.full_name.trim().toLowerCase()
+    if (!matchedEmp && profile?.id) {
+      matchedEmp = employees.find((e) => e.id === profile.id || (e as any).profile_id === profile.id || e.employee_id === profile.id);
+    }
+    if (!matchedEmp && profile?.full_name) {
+      matchedEmp = employees.find(
+        (e) => `${e.first_name || ''} ${e.last_name || ''}`.trim().toLowerCase() === profile.full_name?.trim().toLowerCase()
       );
-      if (match) return match;
     }
-    if (profile?.id) {
-      const match = employees.find((e) => e.id === profile.id || e.profile_id === profile.id);
-      if (match) return match;
+
+    const effectiveBranch = matchedEmp?.branch_name || profile?.branch_name || matchedEmp?.work_location || 'Chennai HQ';
+    const effectiveWorkLoc = matchedEmp?.work_location || profile?.branch_name || effectiveBranch;
+
+    if (matchedEmp) {
+      return {
+        ...matchedEmp,
+        branch_name: effectiveBranch,
+        work_location: effectiveWorkLoc,
+      };
     }
-    if (employees.length > 0) {
-      return employees[0];
+
+    if (profile) {
+      const nameParts = (profile.full_name || 'VeyraHR Employee').split(' ');
+      return {
+        id: profile.id || 'emp_current',
+        company_id: profile.company_id || 'comp_veyra_tn',
+        employee_id: profile.id ? `VEY-EMP-${profile.id.slice(-4).toUpperCase()}` : 'VEY-EMP-0001',
+        first_name: nameParts[0] || 'Employee',
+        last_name: nameParts.slice(1).join(' ') || '',
+        email: profile.email || 'employee@veyrahr.com',
+        phone: profile.phone || '+91 98765 00000',
+        designation: 'Operations Specialist',
+        department_name: profile.department_access || 'Engineering & Tech',
+        branch_name: effectiveBranch,
+        work_location: effectiveWorkLoc,
+        joining_date: new Date().toISOString().split('T')[0],
+        status: 'Active',
+        emergency_contact: '+91 98765 00001',
+        address: `${effectiveBranch} Campus`,
+        avatar_url: profile.avatar_url || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80',
+      };
     }
-    const nameParts = (profile?.full_name || 'VeyraHR Employee').split(' ');
-    return {
-      id: profile?.id || 'emp_current',
-      company_id: profile?.company_id || 'comp_veyra_tn',
-      employee_id: profile?.id ? `VEY-EMP-${profile.id.slice(-4).toUpperCase()}` : 'VEY-EMP-0001',
-      first_name: nameParts[0] || 'VeyraHR',
-      last_name: nameParts.slice(1).join(' ') || 'Employee',
-      email: profile?.email || 'employee@veyrahr.com',
-      phone: profile?.phone || '+91 98765 00000',
-      designation: 'Software Specialist',
-      department_name: profile?.department_access || 'Engineering & Tech',
-      branch_name: profile?.branch_name || 'Chennai HQ',
-      work_location: profile?.branch_name || 'Chennai HQ, Tamil Nadu',
+
+    return employees[0] || {
+      id: 'emp_default',
+      company_id: 'comp_veyra_tn',
+      employee_id: 'VEY-EMP-0001',
+      first_name: 'Employee',
+      last_name: '',
+      email: 'employee@veyrahr.com',
+      phone: '+91 98765 00000',
+      designation: 'Specialist',
+      department_name: 'Engineering & Tech',
+      branch_name: 'Chennai HQ',
+      work_location: 'Chennai HQ',
       joining_date: new Date().toISOString().split('T')[0],
       status: 'Active',
       emergency_contact: '+91 98765 00001',
       address: 'Chennai HQ Campus',
-      avatar_url: profile?.avatar_url || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80',
+      avatar_url: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80',
     };
   }, [employees, profile]);
 
