@@ -9,7 +9,7 @@ import { useData } from '../../context/DataContext';
 import { supabase } from '../../lib/supabase';
 
 export const HRLiveAttendance: React.FC = () => {
-  const { attendance, employees, refreshData } = useData();
+  const { attendance, employees, branches, refreshData } = useData();
   const [query, setQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('ALL');
   const [lastRefresh, setLastRefresh] = useState(new Date());
@@ -130,40 +130,43 @@ export const HRLiveAttendance: React.FC = () => {
 
       {/* ─── WORKPLACE GEOFENCE & SURROUNDING PERIMETER LIMITS OVERVIEW ─── */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-3.5">
-        <div className="p-4 rounded-2xl bg-gradient-to-br from-slate-900 via-[#111A2E] to-slate-900 border border-slate-700 text-white shadow-md space-y-2">
-          <div className="flex items-center justify-between">
-            <span className="text-[10px] font-black uppercase tracking-wider text-blue-400 font-mono">Workplace Perimeter</span>
-            <span className="px-2 py-0.5 rounded-md bg-emerald-500/20 text-emerald-300 text-[10px] font-bold border border-emerald-400/30">
-              Active Enforced
-            </span>
-          </div>
-          <div className="flex items-center gap-2">
-            <MapPin className="w-4 h-4 text-emerald-400" />
-            <h4 className="text-sm font-black text-white">Chennai HQ (Main Campus)</h4>
-          </div>
-          <div className="flex items-center justify-between text-xs text-slate-300 pt-1 border-t border-white/10 font-mono">
-            <span>Surrounding Limit:</span>
-            <span className="font-extrabold text-blue-400">200m Radius Circle</span>
-          </div>
-        </div>
+        {(branches.slice(0, 2)).map((b, idx) => {
+          const isPrimary = idx === 0;
+          const branchAttendanceCount = todayAttendance.filter(
+            (a) => a.check_in_location?.toLowerCase().includes(b.name.toLowerCase()) || 
+                   a.check_in_location?.toLowerCase().includes(b.city?.toLowerCase() || '')
+          ).length;
 
-        <div className="p-4 rounded-2xl bg-gradient-to-br from-slate-900 via-[#111A2E] to-slate-900 border border-slate-700 text-white shadow-md space-y-2">
-          <div className="flex items-center justify-between">
-            <span className="text-[10px] font-black uppercase tracking-wider text-purple-400 font-mono">Workplace Perimeter</span>
-            <span className="px-2 py-0.5 rounded-md bg-emerald-500/20 text-emerald-300 text-[10px] font-bold border border-emerald-400/30">
-              Active Enforced
-            </span>
-          </div>
-          <div className="flex items-center gap-2">
-            <MapPin className="w-4 h-4 text-purple-400" />
-            <h4 className="text-sm font-black text-white">Coimbatore Tech Park</h4>
-          </div>
-          <div className="flex items-center justify-between text-xs text-slate-300 pt-1 border-t border-white/10 font-mono">
-            <span>Surrounding Limit:</span>
-            <span className="font-extrabold text-purple-400">150m Radius Circle</span>
-          </div>
-        </div>
+          return (
+            <div
+              key={b.id || idx}
+              className="p-4 rounded-2xl bg-gradient-to-br from-slate-900 via-[#111A2E] to-slate-900 border border-slate-700 text-white shadow-md space-y-2"
+            >
+              <div className="flex items-center justify-between">
+                <span className={`text-[10px] font-black uppercase tracking-wider font-mono ${isPrimary ? 'text-blue-400' : 'text-purple-400'}`}>
+                  Workplace Perimeter
+                </span>
+                <span className="px-2 py-0.5 rounded-md bg-emerald-500/20 text-emerald-300 text-[10px] font-bold border border-emerald-400/30">
+                  Active Enforced
+                </span>
+              </div>
+              <div className="flex items-center gap-2">
+                <MapPin className={`w-4 h-4 ${isPrimary ? 'text-emerald-400' : 'text-purple-400'}`} />
+                <h4 className="text-sm font-black text-white truncate">
+                  {b.name} {b.is_headquarters ? '(HQ Campus)' : ''}
+                </h4>
+              </div>
+              <div className="flex items-center justify-between text-xs text-slate-300 pt-1 border-t border-white/10 font-mono">
+                <span>Surrounding Limit:</span>
+                <span className={`font-extrabold ${isPrimary ? 'text-blue-400' : 'text-purple-400'}`}>
+                  {b.radius_meters || 150}m Radius Circle
+                </span>
+              </div>
+            </div>
+          );
+        })}
 
+        {/* Geofence Compliance Card */}
         <div className="p-4 rounded-2xl bg-gradient-to-br from-slate-900 via-[#111A2E] to-slate-900 border border-slate-700 text-white shadow-md space-y-2">
           <div className="flex items-center justify-between">
             <span className="text-[10px] font-black uppercase tracking-wider text-teal-400 font-mono">Geofence Compliance</span>

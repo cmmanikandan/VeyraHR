@@ -3,7 +3,7 @@ import { Outlet, useNavigate, NavLink } from 'react-router-dom';
 import { HRSidebar } from './HRSidebar';
 import { Button } from '../ui/Button';
 import { useAuth } from '../../context/AuthContext';
-import { LogOut, Menu } from 'lucide-react';
+import { LogOut, Menu, MapPin } from 'lucide-react';
 import { VeyraBrandHeader } from '../common/VeyraBrandHeader';
 
 export const HRDashboardLayout: React.FC = () => {
@@ -52,10 +52,14 @@ export const HRDashboardLayout: React.FC = () => {
               </span>
             </div>
 
-            {/* Desktop Console Badge */}
+            {/* Desktop Console Badge & Assigned Location */}
             <div className="hidden md:flex items-center gap-2.5">
-              <span className="px-3 py-1 rounded-lg bg-veyra-blue-soft border border-veyra-blue-border text-veyra-blue font-extrabold text-xs">
+              <span className="px-3 py-1 rounded-lg bg-blue-50 border border-blue-200 text-blue-700 font-extrabold text-xs">
                 HR Operations Console
+              </span>
+              <span className="flex items-center gap-1.5 px-3 py-1 rounded-lg bg-slate-100 border border-slate-200 text-slate-700 text-xs font-bold font-mono">
+                <MapPin className="w-3.5 h-3.5 text-blue-600" />
+                <span>{profile?.branch_name || 'All Regional Hubs (HQ)'}</span>
               </span>
             </div>
           </div>
