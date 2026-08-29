@@ -54,9 +54,6 @@ export const EmployeeProfile: React.FC = () => {
   const [biometricEnabled, setBiometricEnabled] = useState(() => {
     return localStorage.getItem('veyra_pref_biometric') !== 'false';
   });
-  const [autoGeofence, setAutoGeofence] = useState(() => {
-    return localStorage.getItem('veyra_pref_geofence') !== 'false';
-  });
   const [notifyAttendance, setNotifyAttendance] = useState(() => {
     return localStorage.getItem('veyra_pref_notify_att') !== 'false';
   });
@@ -120,12 +117,6 @@ export const EmployeeProfile: React.FC = () => {
     const next = !biometricEnabled;
     setBiometricEnabled(next);
     localStorage.setItem('veyra_pref_biometric', String(next));
-  };
-
-  const handleToggleGeofence = () => {
-    const next = !autoGeofence;
-    setAutoGeofence(next);
-    localStorage.setItem('veyra_pref_geofence', String(next));
   };
 
   const handleToggleNotifyAtt = () => {
@@ -354,19 +345,6 @@ export const EmployeeProfile: React.FC = () => {
                   className={`w-11 h-6 rounded-full transition-colors relative p-0.5 ${biometricEnabled ? 'bg-blue-600' : 'bg-slate-300'}`}
                 >
                   <div className={`w-5 h-5 rounded-full bg-white transition-transform ${biometricEnabled ? 'translate-x-5' : 'translate-x-0'}`} />
-                </button>
-              </div>
-
-              <div className="flex items-center justify-between pt-2 border-t border-slate-200">
-                <div>
-                  <h5 className="font-extrabold text-slate-900">GPS Geofence Auto-Verify</h5>
-                  <p className="text-[11px] text-slate-500">Strictly enforce 50m radius around Chennai HQ</p>
-                </div>
-                <button
-                  onClick={handleToggleGeofence}
-                  className={`w-11 h-6 rounded-full transition-colors relative p-0.5 ${autoGeofence ? 'bg-blue-600' : 'bg-slate-300'}`}
-                >
-                  <div className={`w-5 h-5 rounded-full bg-white transition-transform ${autoGeofence ? 'translate-x-5' : 'translate-x-0'}`} />
                 </button>
               </div>
             </div>

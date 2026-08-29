@@ -175,14 +175,14 @@ export const EmployeeAttendance: React.FC = () => {
               b.name?.toLowerCase() === currentEmp.work_location?.toLowerCase() ||
               (b.city && currentEmp.work_location?.toLowerCase().includes(b.city.toLowerCase()))
           ) || branches[0] || {
-            latitude: 12.9654,
-            longitude: 80.2461,
+            latitude: 13.0827,
+            longitude: 80.2707,
             radius_meters: 150,
-            name: currentEmp.branch_name || 'Chennai Corporate HQ',
+            name: currentEmp.branch_name || 'Chennai HQ',
           };
 
-          const branchLat = assignedBranch.latitude || 12.9654;
-          const branchLng = assignedBranch.longitude || 80.2461;
+          const branchLat = assignedBranch.latitude || 13.0827;
+          const branchLng = assignedBranch.longitude || 80.2707;
           const allowedRadius = assignedBranch.radius_meters || 150;
 
           // Haversine accurate distance calculation
@@ -199,7 +199,7 @@ export const EmployeeAttendance: React.FC = () => {
           const distanceMeters = Math.round(R * c);
 
           // If location is outside workplace boundary
-          if (distanceMeters > allowedRadius && distanceMeters > 50000) {
+          if (distanceMeters > allowedRadius) {
             setGeofenceAlert({
               isOpen: true,
               distanceText: distanceMeters > 1000 ? `${(distanceMeters / 1000).toFixed(1)} km away` : `${distanceMeters} m away`,
@@ -213,12 +213,22 @@ export const EmployeeAttendance: React.FC = () => {
           executeBiometricAuth();
         },
         () => {
-          executeBiometricAuth();
+          setGeofenceAlert({
+            isOpen: true,
+            distanceText: 'GPS Location Access Error',
+            branchName: currentEmp.branch_name || 'Chennai HQ',
+            allowedRadius: 'GPS permissions and accuracy are required for biometric checks.',
+          });
         },
         { timeout: 4000, enableHighAccuracy: true }
       );
     } else {
-      executeBiometricAuth();
+      setGeofenceAlert({
+        isOpen: true,
+        distanceText: 'Unsupported Browser GPS',
+        branchName: currentEmp.branch_name || 'Chennai HQ',
+        allowedRadius: 'Device must support Geolocation API to register biometric check-ins.',
+      });
     }
   };
 
