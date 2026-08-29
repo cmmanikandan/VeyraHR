@@ -153,6 +153,10 @@ const AppRoutes: React.FC = () => {
           <Route index element={<Navigate to="/admin/dashboard" replace />} />
           <Route path="dashboard" element={<AdminDashboard />} />
           <Route path="hr-managers" element={<HRManagersPage />} />
+          <Route path="employees" element={<HREmployees />} />
+          <Route path="documents" element={<HRDocumentsPage />} />
+          <Route path="payroll" element={<HRPayrollManagement />} />
+          <Route path="departments" element={<HRDepartmentsRoles />} />
           <Route path="organization" element={<AdminOrganizationPage />} />
           <Route path="branches" element={<AdminBranchesPage />} />
           <Route path="security" element={<SecurityPage />} />

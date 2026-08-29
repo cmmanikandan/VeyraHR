@@ -238,7 +238,11 @@ export const HRLiveAttendance: React.FC = () => {
                     <tr key={att.id} className="hover:bg-veyra-bg-secondary/50 transition-colors">
                       <td className="py-3.5 px-4">
                         <div className="flex items-center gap-2.5">
-                          <Avatar name={att.employee_name || 'Staff'} size="sm" />
+                          <Avatar 
+                            src={employees.find((e) => e.id === att.employee_id || e.employee_id === att.employee_id)?.avatar_url}
+                            name={att.employee_name || 'Staff'} 
+                            size="sm" 
+                          />
                           <span className="font-bold text-veyra-text">{att.employee_name}</span>
                         </div>
                       </td>

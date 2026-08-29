@@ -12,7 +12,9 @@ import {
   LogOut,
   ChevronLeft,
   ChevronRight,
-  X
+  X,
+  CreditCard,
+  FileText
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { VeyraBrandHeader } from '../common/VeyraBrandHeader';
@@ -42,6 +44,10 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
     { label: 'Dashboard', path: '/admin/dashboard', icon: LayoutDashboard },
     { label: 'Organization', path: '/admin/organization', icon: Building2 },
     { label: 'HR Managers', path: '/admin/hr-managers', icon: Users },
+    { label: 'Manage Employees', path: '/admin/employees', icon: Users },
+    { label: 'Departments & Roles', path: '/admin/departments', icon: Building2 },
+    { label: 'Payroll Management', path: '/admin/payroll', icon: CreditCard },
+    { label: 'Documentation Vault', path: '/admin/documents', icon: FileText },
     { label: 'Branches', path: '/admin/branches', icon: MapPin },
     { label: 'Security Governance', path: '/admin/security', icon: ShieldCheck },
     { label: 'Audit Logs', path: '/admin/audit-logs', icon: History },

@@ -46,6 +46,7 @@ interface DataContextType {
   addEmployee: (emp: Omit<Employee, 'id' | 'employee_id'>) => Promise<Employee>;
   deleteEmployee: (id: string) => Promise<void>;
   addHRManager: (hr: Omit<HRManager, 'id' | 'created_at'>) => Promise<HRManager>;
+  updateHRManager: (hr: HRManager) => Promise<HRManager>;
   updateHRManagerStatus: (id: string, status: 'Active' | 'Inactive') => Promise<void>;
   deleteHRManager: (id: string) => Promise<void>;
   forceLogoutSession: (sessionId: string) => Promise<void>;
@@ -456,6 +457,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         branch_name: newHR.branch_name || 'Chennai HQ',
         department_access: newHR.department_access || 'All Departments',
         status: newHR.status || 'Active',
+        password: newHR.password,
       });
       if (profileErr) console.warn('HR Profile upsert error:', profileErr);
 
@@ -470,6 +472,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         permissions: newHR.permissions || ['Employees', 'Attendance', 'Leaves', 'Shifts', 'Announcements', 'Reports'],
         status: newHR.status || 'Active',
         avatar_url: newHR.avatar_url || null,
+        password: newHR.password,
       });
       if (hrErr) console.warn('HR Manager upsert error:', hrErr);
     } catch (e) {
@@ -489,6 +492,74 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     ]);
 
     return newHR;
+  };
+
+  const updateHRManager = async (hr: HRManager): Promise<HRManager> => {
+    setHrManagers((prev) => {
+      const updated = prev.map((h) => (h.id === hr.id ? hr : h));
+      try {
+        localStorage.setItem('veyra_hr_managers', JSON.stringify(updated));
+      } catch (err) {
+        console.warn('LocalStorage save error:', err);
+      }
+      return updated;
+    });
+
+    try {
+      const hrEmail = hr.email.trim().toLowerCase();
+
+      // Save to local credentials store
+      if (hr.password) {
+        try {
+          const creds = JSON.parse(localStorage.getItem('veyra_hr_credentials') || '{}');
+          creds[hrEmail] = hr.password;
+          localStorage.setItem('veyra_hr_credentials', JSON.stringify(creds));
+        } catch {}
+      }
+
+      await supabase.from('profiles').upsert({
+        id: hr.id,
+        company_id: hr.company_id || 'comp_veyra_tn',
+        full_name: hr.full_name,
+        email: hrEmail,
+        phone: hr.phone || null,
+        role: 'hr_manager',
+        branch_name: hr.branch_name || 'Chennai HQ',
+        department_access: hr.department_access || 'All Departments',
+        status: hr.status || 'Active',
+        password: hr.password,
+      });
+
+      await supabase.from('hr_managers').upsert({
+        id: hr.id,
+        company_id: hr.company_id || 'comp_veyra_tn',
+        full_name: hr.full_name,
+        email: hrEmail,
+        phone: hr.phone || null,
+        branch_name: hr.branch_name || 'Chennai HQ',
+        department_access: hr.department_access || 'All Departments',
+        permissions: hr.permissions || ['Employees', 'Attendance', 'Leaves', 'Shifts', 'Announcements', 'Reports'],
+        status: hr.status || 'Active',
+        avatar_url: hr.avatar_url || null,
+        password: hr.password,
+      });
+    } catch (e) {
+      console.warn('HR Manager Supabase sync error:', e);
+    }
+
+    setAuditLogs((prev) => [
+      {
+        id: `aud_${Date.now()}`,
+        company_id: hr.company_id || 'comp_veyra_tn',
+        actor_name: 'Master Administrator',
+        action: 'HR_MANAGER_UPDATED',
+        details: `Updated credentials and permissions for HR Manager ${hr.full_name} (${hr.email})`,
+        created_at: new Date().toISOString(),
+      },
+      ...prev,
+    ]);
+
+    return hr;
   };
 
   const updateHRManagerStatus = async (id: string, status: 'Active' | 'Inactive') => {
@@ -573,6 +644,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         address: newEmp.address || null,
         status: newEmp.status || 'Active',
         avatar_url: newEmp.avatar_url || null,
+        password: newEmp.password,
       };
 
       await supabase.from('employees').upsert(dbEmpPayload);
@@ -588,6 +660,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         department_access: newEmp.department_name || 'Engineering & Tech',
         avatar_url: newEmp.avatar_url,
         status: newEmp.status || 'Active',
+        password: newEmp.password,
       });
     } catch (e) {
       console.warn('Supabase insertion notice:', e);
@@ -1064,6 +1137,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         addEmployee,
         deleteEmployee,
         addHRManager,
+        updateHRManager,
         updateHRManagerStatus,
         deleteHRManager,
         forceLogoutSession,

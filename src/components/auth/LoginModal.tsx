@@ -289,6 +289,19 @@ export const LoginModal: React.FC<LoginModalProps> = ({
         };
       }
 
+      // Save credentials to local storage for future offline access on this device
+      try {
+        if (targetRole === 'hr_manager') {
+          const creds = JSON.parse(localStorage.getItem('veyra_hr_credentials') || '{}');
+          creds[cleanInput] = cleanPwd;
+          localStorage.setItem('veyra_hr_credentials', JSON.stringify(creds));
+        } else if (targetRole === 'employee') {
+          const creds = JSON.parse(localStorage.getItem('veyra_employee_credentials') || '{}');
+          creds[cleanInput] = cleanPwd;
+          localStorage.setItem('veyra_employee_credentials', JSON.stringify(creds));
+        }
+      } catch {}
+
       // ─── OPTION A: EMPLOYEE DIRECT LOGIN (NO OTP) ──────────────────────
       if (targetRole === 'employee') {
         setProfile({

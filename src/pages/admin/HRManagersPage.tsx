@@ -27,7 +27,7 @@ import { useData } from '../../context/DataContext';
 import { HRManager } from '../../types/database';
 
 export const HRManagersPage: React.FC = () => {
-  const { hrManagers, branches, departments, addHRManager, updateHRManagerStatus, deleteHRManager } = useData();
+  const { hrManagers, branches, departments, addHRManager, updateHRManager, updateHRManagerStatus, deleteHRManager } = useData();
   const [searchTerm, setSearchTerm] = useState('');
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -41,6 +41,16 @@ export const HRManagersPage: React.FC = () => {
   const [deptAccess, setDeptAccess] = useState('All Departments');
   const [password, setPassword] = useState('VeyraHR2026!');
   const [permissions, setPermissions] = useState<string[]>(['Attendance', 'Leave Approvals', 'Shift Roster']);
+
+  // Edit Form Fields
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [editingHR, setEditingHR] = useState<HRManager | null>(null);
+  const [editFullName, setEditFullName] = useState('');
+  const [editMobile, setEditMobile] = useState('');
+  const [editSelectedBranch, setEditSelectedBranch] = useState('');
+  const [editDeptAccess, setEditDeptAccess] = useState('');
+  const [editPassword, setEditPassword] = useState('');
+  const [editPermissions, setEditPermissions] = useState<string[]>([]);
 
   const filteredHRs = hrManagers.filter(
     (h) =>
@@ -92,6 +102,54 @@ export const HRManagersPage: React.FC = () => {
       setError(err.message || 'Failed to create HR Manager.');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleOpenEditModal = (hr: HRManager) => {
+    setEditingHR(hr);
+    setEditFullName(hr.full_name);
+    setEditMobile(hr.phone || '');
+    setEditSelectedBranch(hr.branch_name);
+    setEditDeptAccess(hr.department_access);
+    setEditPassword(hr.password || '');
+    setEditPermissions(hr.permissions);
+    setIsEditModalOpen(true);
+  };
+
+  const handleUpdateHR = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingHR || !editFullName || !editMobile) {
+      setError('Please fill in all required fields.');
+      return;
+    }
+
+    setLoading(true);
+    setError(null);
+
+    try {
+      await updateHRManager({
+        ...editingHR,
+        full_name: editFullName.trim(),
+        phone: editMobile.trim(),
+        branch_name: editSelectedBranch,
+        department_access: editDeptAccess,
+        password: editPassword.trim(),
+        permissions: editPermissions,
+      });
+      setIsEditModalOpen(false);
+      setEditingHR(null);
+    } catch (err: any) {
+      setError(err.message || 'Failed to update HR Manager.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const toggleEditPermission = (p: string) => {
+    if (editPermissions.includes(p)) {
+      setEditPermissions(editPermissions.filter((item) => item !== p));
+    } else {
+      setEditPermissions([...editPermissions, p]);
     }
   };
 
@@ -187,6 +245,15 @@ export const HRManagersPage: React.FC = () => {
                 </div>
 
                 <div className="flex items-center gap-2 pt-2 sm:pt-0 border-t sm:border-t-0 border-veyra-border/60 justify-end">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => handleOpenEditModal(hr)}
+                    icon={<Edit3 className="w-3.5 h-3.5" />}
+                    className="bg-white text-xs font-bold"
+                  >
+                    Edit
+                  </Button>
                   <Button
                     variant="outline"
                     size="sm"
@@ -334,6 +401,121 @@ export const HRManagersPage: React.FC = () => {
             </Button>
             <Button type="submit" variant="primary" loading={loading} className="font-bold shadow-xs">
               Create HR Account
+            </Button>
+          </div>
+        </form>
+      </Modal>
+
+      {/* EDIT HR MANAGER MODAL */}
+      <Modal isOpen={isEditModalOpen} onClose={() => { setIsEditModalOpen(false); setEditingHR(null); }} title="Edit HR Manager" maxWidth="md">
+        <form onSubmit={handleUpdateHR} className="space-y-4 text-left">
+          {error && (
+            <div className="p-3 bg-red-50 border border-red-200 text-veyra-danger text-xs rounded-xl font-medium">
+              {error}
+            </div>
+          )}
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <Input
+              label="Full Name *"
+              placeholder="e.g. Priya Sundaram"
+              value={editFullName}
+              onChange={(e) => setEditFullName(e.target.value)}
+              required
+            />
+            <Input
+              label="Work Email Address (Cannot change)"
+              type="email"
+              value={editingHR?.email || ''}
+              disabled
+              className="bg-slate-100 cursor-not-allowed"
+            />
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <Input
+              label="Mobile Phone *"
+              placeholder="+91 98401 23456"
+              value={editMobile}
+              onChange={(e) => setEditMobile(e.target.value)}
+              required
+            />
+
+            <div>
+              <label className="block text-xs font-semibold text-veyra-text mb-1.5">Assigned Branch *</label>
+              <select
+                value={editSelectedBranch}
+                onChange={(e) => setEditSelectedBranch(e.target.value)}
+                className="w-full p-2.5 bg-white border border-veyra-border rounded-xl text-xs font-medium text-veyra-text"
+              >
+                {branches.map((b) => (
+                  <option key={b.id} value={b.name}>
+                    {b.name} ({b.city})
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-xs font-semibold text-veyra-text mb-1.5">Department Access</label>
+              <select
+                value={editDeptAccess}
+                onChange={(e) => setEditDeptAccess(e.target.value)}
+                className="w-full p-2.5 bg-white border border-veyra-border rounded-xl text-xs font-medium text-veyra-text"
+              >
+                <option>All Departments</option>
+                {departments.map((d) => (
+                  <option key={d.id} value={d.name}>
+                    {d.name} Only
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <Input
+              label="Reset Password *"
+              type="text"
+              placeholder="New password (e.g. VeyraHR2026!)"
+              value={editPassword}
+              onChange={(e) => setEditPassword(e.target.value)}
+              required
+            />
+          </div>
+
+          <div>
+            <label className="block text-xs font-bold text-veyra-text uppercase tracking-wider mb-2">
+              HR Portal Permissions
+            </label>
+            <div className="grid grid-cols-2 gap-2">
+              {['Attendance', 'Leave Approvals', 'Shift Roster', 'Employee Onboarding', 'Reports Export'].map((p) => {
+                const active = editPermissions.includes(p);
+                return (
+                  <button
+                    key={p}
+                    type="button"
+                    onClick={() => toggleEditPermission(p)}
+                    className={`p-2.5 rounded-xl border text-xs font-bold transition-all text-left flex items-center justify-between ${
+                      active
+                        ? 'bg-veyra-blue-soft border-veyra-blue-border text-veyra-blue'
+                        : 'bg-white border-veyra-border text-veyra-text-sub hover:bg-veyra-bg-secondary'
+                    }`}
+                  >
+                    <span>{p}</span>
+                    {active && <CheckCircle2 className="w-4 h-4 text-veyra-blue" />}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          <div className="pt-4 flex items-center justify-end gap-3 border-t border-veyra-border">
+            <Button type="button" variant="outline" onClick={() => { setIsEditModalOpen(false); setEditingHR(null); }} className="bg-white">
+              Cancel
+            </Button>
+            <Button type="submit" variant="primary" loading={loading} className="font-bold shadow-xs">
+              Save Changes
             </Button>
           </div>
         </form>
