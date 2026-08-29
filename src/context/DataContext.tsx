@@ -803,18 +803,36 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const todayStr = new Date().toISOString().split('T')[0];
     const nowIso = new Date().toISOString();
 
-    const emp = employees.find((e) => e.id === employeeId);
+    const emp = employees.find(
+      (e) =>
+        e.id === employeeId ||
+        (e as any).profile_id === employeeId ||
+        e.employee_id?.toLowerCase() === employeeId.toLowerCase() ||
+        e.email?.toLowerCase() === employeeId.toLowerCase()
+    );
     const empName = emp ? `${emp.first_name} ${emp.last_name}` : 'Employee';
+    const primaryId = emp ? emp.id : employeeId;
 
     const currentHour = new Date().getHours();
     const currentMin = new Date().getMinutes();
     const isLate = currentHour > 9 || (currentHour === 9 && currentMin > 15);
 
-    const existing = attendance.find((a) => a.employee_id === employeeId && a.date === todayStr);
+    const existing = attendance.find(
+      (a) =>
+        (a.employee_id === primaryId ||
+         a.employee_id === employeeId ||
+         (emp?.employee_id && a.employee_id === emp.employee_id) ||
+         (emp?.profile_id && a.employee_id === emp.profile_id) ||
+         (emp?.email && a.employee_id?.toLowerCase() === emp.email.toLowerCase()) ||
+         (emp && a.employee_name && a.employee_name.toLowerCase().includes(emp.first_name.toLowerCase()))) &&
+        a.date === todayStr
+    );
 
     if (existing) {
       const updatedRecord: AttendanceRecord = {
         ...existing,
+        employee_id: primaryId,
+        employee_name: empName,
         check_in_time: existing.check_in_time || nowIso,
         check_out_time: undefined,
         check_in_location: location,
@@ -839,7 +857,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     const newRecord: AttendanceRecord = {
       id: `att_${Date.now()}`,
-      employee_id: employeeId,
+      employee_id: primaryId,
       employee_name: empName,
       company_id: 'comp_veyra_tn',
       date: todayStr,
@@ -860,7 +878,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
 
     setAttendance((prev) => {
-      const updated = [newRecord, ...prev.filter((a) => !(a.employee_id === employeeId && a.date === todayStr))];
+      const updated = [newRecord, ...prev.filter((a) => !(a.employee_id === primaryId && a.date === todayStr))];
       try { localStorage.setItem('veyra_attendance', JSON.stringify(updated)); } catch {}
       return updated;
     });
@@ -872,15 +890,36 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const todayStr = new Date().toISOString().split('T')[0];
     const nowIso = new Date().toISOString();
 
+    const emp = employees.find(
+      (e) =>
+        e.id === employeeId ||
+        (e as any).profile_id === employeeId ||
+        e.employee_id?.toLowerCase() === employeeId.toLowerCase() ||
+        e.email?.toLowerCase() === employeeId.toLowerCase()
+    );
+    const empName = emp ? `${emp.first_name} ${emp.last_name}` : 'Employee';
+    const primaryId = emp ? emp.id : employeeId;
+
     let updatedRecord: AttendanceRecord | null = null;
 
     setAttendance((prev) => {
       const updated = prev.map((a) => {
-        if (a.employee_id === employeeId && a.date === todayStr) {
+        const isMatch =
+          a.date === todayStr &&
+          (a.employee_id === primaryId ||
+           a.employee_id === employeeId ||
+           (emp?.employee_id && a.employee_id === emp.employee_id) ||
+           (emp?.profile_id && a.employee_id === emp.profile_id) ||
+           (emp?.email && a.employee_id?.toLowerCase() === emp.email.toLowerCase()) ||
+           (emp && a.employee_name && a.employee_name.toLowerCase().includes(emp.first_name.toLowerCase())));
+
+        if (isMatch) {
           const checkInDate = a.check_in_time ? new Date(a.check_in_time).getTime() : Date.now() - 28800000;
           const durationMins = Math.max(1, Math.round((Date.now() - checkInDate) / 60000));
           updatedRecord = {
             ...a,
+            employee_id: primaryId,
+            employee_name: empName,
             check_out_time: nowIso,
             check_out_location: location,
             working_hours_mins: durationMins,
@@ -891,11 +930,10 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       });
 
       if (!updatedRecord) {
-        const emp = employees.find((e) => e.id === employeeId);
         updatedRecord = {
           id: `att_${Date.now()}`,
-          employee_id: employeeId,
-          employee_name: emp ? `${emp.first_name} ${emp.last_name}` : 'Employee',
+          employee_id: primaryId,
+          employee_name: empName,
           company_id: 'comp_veyra_tn',
           date: todayStr,
           check_out_time: nowIso,

@@ -239,7 +239,17 @@ export const EmployeeHome: React.FC<EmployeeHomeProps> = ({ onNavigate }) => {
   }, [branches, currentEmp.branch_name]);
 
   const todayStr = new Date().toISOString().split('T')[0];
-  const todayAttendance = attendance.find((a) => a.employee_id === currentEmp.id && a.date === todayStr);
+  const todayAttendance = useMemo(() => {
+    return attendance.find(
+      (a) =>
+        (a.employee_id === currentEmp.id ||
+         a.employee_id === currentEmp.employee_id ||
+         (currentEmp.profile_id && a.employee_id === currentEmp.profile_id) ||
+         (currentEmp.email && a.employee_id?.toLowerCase() === currentEmp.email.toLowerCase()) ||
+         (a.employee_name && a.employee_name.toLowerCase().includes(currentEmp.first_name.toLowerCase()))) &&
+        a.date === todayStr
+    );
+  }, [attendance, currentEmp, todayStr]);
 
   const [isQrOpen, setIsQrOpen] = useState(false);
   const [isIdCardOpen, setIsIdCardOpen] = useState(false);
@@ -710,6 +720,58 @@ export const EmployeeHome: React.FC<EmployeeHomeProps> = ({ onNavigate }) => {
           <span>Grace Period: {shifts[0]?.grace_period_mins || 15}m allowed</span>
         </div>
       </div>
+
+      {/* ─── TODAY'S LIVE VERIFIED PUNCH LOG & AUDIT BADGE ───────────────── */}
+      {todayAttendance && (
+        <div className="bg-white rounded-3xl p-4 sm:p-5 border border-emerald-200/80 bg-gradient-to-br from-white via-emerald-50/20 to-teal-50/30 shadow-2xs space-y-3">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <span className={`w-2.5 h-2.5 rounded-full ${isCheckedIn ? 'bg-emerald-500 animate-ping' : 'bg-blue-500'}`} />
+              <h4 className="text-xs font-black text-slate-900 uppercase font-mono tracking-wider">
+                Today's Recorded Punch Log
+              </h4>
+            </div>
+            <span className={`px-2.5 py-0.5 rounded-full text-[11px] font-black border ${
+              todayAttendance.status === 'Late'
+                ? 'bg-amber-50 text-amber-700 border-amber-300'
+                : 'bg-emerald-50 text-emerald-700 border-emerald-300'
+            }`}>
+              {todayAttendance.status || (isCheckedIn ? 'Present (Active)' : 'Present')}
+            </span>
+          </div>
+
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 text-xs">
+            <div className="p-2.5 rounded-2xl bg-white border border-slate-200/80 shadow-2xs">
+              <span className="text-[10px] uppercase font-bold text-slate-400 block font-mono">Punch-In</span>
+              <span className="font-extrabold text-slate-900 font-mono">
+                {todayAttendance.check_in_time ? new Date(todayAttendance.check_in_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '--:--'}
+              </span>
+            </div>
+
+            <div className="p-2.5 rounded-2xl bg-white border border-slate-200/80 shadow-2xs">
+              <span className="text-[10px] uppercase font-bold text-slate-400 block font-mono">Punch-Out</span>
+              <span className="font-extrabold text-slate-900 font-mono">
+                {todayAttendance.check_out_time ? new Date(todayAttendance.check_out_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Active Shift'}
+              </span>
+            </div>
+
+            <div className="p-2.5 rounded-2xl bg-white border border-slate-200/80 shadow-2xs col-span-2 sm:col-span-2">
+              <span className="text-[10px] uppercase font-bold text-slate-400 block font-mono">Verification Method</span>
+              <span className="font-bold text-blue-700 flex items-center gap-1.5 truncate text-[11px]">
+                <ShieldCheck className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                {todayAttendance.verification_method || 'Dynamic QR + GPS'}
+              </span>
+            </div>
+          </div>
+
+          {todayAttendance.check_in_location && (
+            <div className="flex items-center gap-1.5 text-[11px] text-slate-600 pt-1 border-t border-slate-100 font-mono">
+              <MapPin className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+              <span className="truncate">{todayAttendance.check_in_location}</span>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* ─── 3. 2×2 LIVE STATS GRID ───────────────────────────────────── */}
       <div className="grid grid-cols-2 gap-3">

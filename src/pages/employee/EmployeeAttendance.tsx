@@ -101,7 +101,17 @@ export const EmployeeAttendance: React.FC = () => {
   }, [employees, profile]);
 
   const todayStr = new Date().toISOString().split('T')[0];
-  const todayRecord = attendance.find((a) => a.employee_id === currentEmp.id && a.date === todayStr);
+  const todayRecord = useMemo(() => {
+    return attendance.find(
+      (a) =>
+        (a.employee_id === currentEmp.id ||
+         a.employee_id === currentEmp.employee_id ||
+         (currentEmp.profile_id && a.employee_id === currentEmp.profile_id) ||
+         (currentEmp.email && a.employee_id?.toLowerCase() === currentEmp.email.toLowerCase()) ||
+         (a.employee_name && a.employee_name.toLowerCase().includes(currentEmp.first_name.toLowerCase()))) &&
+        a.date === todayStr
+    );
+  }, [attendance, currentEmp, todayStr]);
 
   const [activeView, setActiveView] = useState<'calendar' | 'details'>('calendar');
   const [isQrOpen, setIsQrOpen] = useState(false);
@@ -271,9 +281,15 @@ export const EmployeeAttendance: React.FC = () => {
   // Filter real attendance records for current employee
   const myAttendance = useMemo(() => {
     return attendance
-      .filter((a) => a.employee_id === currentEmp.id)
+      .filter((a) =>
+        a.employee_id === currentEmp.id ||
+        a.employee_id === currentEmp.employee_id ||
+        (currentEmp.profile_id && a.employee_id === currentEmp.profile_id) ||
+        (currentEmp.email && a.employee_id?.toLowerCase() === currentEmp.email.toLowerCase()) ||
+        (a.employee_name && a.employee_name.toLowerCase().includes(currentEmp.first_name.toLowerCase()))
+      )
       .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-  }, [attendance, currentEmp.id]);
+  }, [attendance, currentEmp]);
 
   // Working Hours analytics from actual recorded data
   const totalWorkedMins = useMemo(() => {
