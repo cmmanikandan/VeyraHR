@@ -293,6 +293,18 @@ export const KioskPage: React.FC = () => {
       time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
     });
 
+    // Voice announcement synthesizer for hands-free front-desk confirmation
+    if (soundEnabled && 'speechSynthesis' in window) {
+      try {
+        window.speechSynthesis.cancel();
+        const shortAction = actionText.includes('Checked In') ? 'Checked In' : 'Checked Out';
+        const utterance = new SpeechSynthesisUtterance(`${shortAction}. Welcome, ${matchedEmp.first_name}!`);
+        utterance.rate = 1.05;
+        utterance.pitch = 1.0;
+        window.speechSynthesis.speak(utterance);
+      } catch {}
+    }
+
     setTimeout(() => {
       setVerifiedEmployee(null);
       isCooldownRef.current = false;

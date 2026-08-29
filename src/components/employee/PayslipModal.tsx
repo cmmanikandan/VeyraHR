@@ -20,6 +20,22 @@ interface PayslipModalProps {
   employee: Employee;
   month?: string;
   year?: number;
+  payrollData?: {
+    baseSalary?: number;
+    hra?: number;
+    specialAllowance?: number;
+    conveyance?: number;
+    overtimeEarnings?: number;
+    pfDeduction?: number;
+    professionalTax?: number;
+    tdsTax?: number;
+    leaveDeductions?: number;
+    totalDeductions?: number;
+    grossSalary?: number;
+    netPayable?: number;
+    daysPresent?: number;
+    totalWorkingDays?: number;
+  };
 }
 
 export const PayslipModal: React.FC<PayslipModalProps> = ({
@@ -27,24 +43,24 @@ export const PayslipModal: React.FC<PayslipModalProps> = ({
   onClose,
   employee,
   month = 'August 2026',
-  year = 2026,
+  payrollData,
 }) => {
-  // Earnings Breakdown
-  const basicPay = 48000;
-  const hra = 19200;
-  const specialAllowance = 12800;
-  const conveyance = 4000;
-  const performanceBonus = 6000;
-  const grossEarnings = basicPay + hra + specialAllowance + conveyance + performanceBonus;
+  // Dynamic or default earnings breakdown
+  const basicPay = payrollData?.baseSalary ?? 48000;
+  const hra = payrollData?.hra ?? 19200;
+  const specialAllowance = payrollData?.specialAllowance ?? 12800;
+  const conveyance = payrollData?.conveyance ?? 4000;
+  const overtimeEarnings = payrollData?.overtimeEarnings ?? 0;
+  const grossEarnings = payrollData?.grossSalary ?? (basicPay + hra + specialAllowance + conveyance + overtimeEarnings);
 
-  // Deductions Breakdown
-  const pf = 5760;
-  const professionalTax = 200;
-  const tds = 3500;
-  const medicalInsurance = 1200;
-  const totalDeductions = pf + professionalTax + tds + medicalInsurance;
+  // Dynamic or default deductions breakdown
+  const pf = payrollData?.pfDeduction ?? 5760;
+  const professionalTax = payrollData?.professionalTax ?? 200;
+  const tds = payrollData?.tdsTax ?? 3500;
+  const leaveDeductions = payrollData?.leaveDeductions ?? 0;
+  const totalDeductions = payrollData?.totalDeductions ?? (pf + professionalTax + tds + leaveDeductions);
 
-  const netSalary = grossEarnings - totalDeductions;
+  const netSalary = payrollData?.netPayable ?? (grossEarnings - totalDeductions);
 
   const handlePrint = () => {
     window.print();
@@ -122,8 +138,8 @@ export const PayslipModal: React.FC<PayslipModalProps> = ({
                 <span className="font-mono font-semibold">₹{conveyance.toLocaleString('en-IN')}</span>
               </div>
               <div className="flex justify-between text-slate-700 pt-1.5">
-                <span>Performance Incentive</span>
-                <span className="font-mono font-semibold">₹{performanceBonus.toLocaleString('en-IN')}</span>
+                <span>Overtime / Performance Incentive</span>
+                <span className="font-mono font-semibold">₹{overtimeEarnings.toLocaleString('en-IN')}</span>
               </div>
             </div>
             <div className="bg-slate-50 px-4 py-2.5 border-t border-slate-200 flex justify-between text-xs font-extrabold text-slate-900">
@@ -152,8 +168,8 @@ export const PayslipModal: React.FC<PayslipModalProps> = ({
                 <span className="font-mono font-semibold">₹{tds.toLocaleString('en-IN')}</span>
               </div>
               <div className="flex justify-between text-slate-700 pt-1.5">
-                <span>Health & Medical Insurance</span>
-                <span className="font-mono font-semibold">₹{medicalInsurance.toLocaleString('en-IN')}</span>
+                <span>Leave / Absence Deductions</span>
+                <span className="font-mono font-semibold">₹{leaveDeductions.toLocaleString('en-IN')}</span>
               </div>
             </div>
             <div className="bg-slate-50 px-4 py-2.5 border-t border-slate-200 flex justify-between text-xs font-extrabold text-slate-900">

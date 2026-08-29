@@ -72,6 +72,8 @@ export const DynamicQRScanner: React.FC<DynamicQRScannerProps> = ({
   // Strict Geofence and AI face verification states
   const [isAnalyzingFace, setIsAnalyzingFace] = useState(false);
   const [faceAnalysisError, setFaceAnalysisError] = useState<string | null>(null);
+  const [faceMatchConfidence, setFaceMatchConfidence] = useState<number | null>(null);
+  const [faceMatchVerdict, setFaceMatchVerdict] = useState<string>('');
   const [geofenceViolation, setGeofenceViolation] = useState(false);
   const [allowedBranchRadius, setAllowedBranchRadius] = useState('200 meters');
   const [distanceText, setDistanceText] = useState('');
@@ -223,16 +225,18 @@ export const DynamicQRScanner: React.FC<DynamicQRScannerProps> = ({
             
             // Invoke Groq vision API
             const result = await verifyFaceWithGroqVision(selfieBase64, profileDpUrl);
+            setFaceMatchConfidence(result.confidenceScore);
+            setFaceMatchVerdict(result.verdict);
             
             if (result.matched) {
               stopCamera();
               setScannedSuccess(true);
-              setSuccessMethod('AI Face Match (Llama-3.2 Vision Verified)');
+              setSuccessMethod(`AI Face Match • ${result.confidenceScore}% Confidence (Groq Llama-3.2 Vision)`);
               playAudioChime();
               setTimeout(() => {
-                onConfirmAttendance(locationText, 'AI Face Match (Groq)');
+                onConfirmAttendance(locationText, `AI Face Match (${result.confidenceScore}%)`);
                 onClose();
-              }, 800);
+              }, 1000);
             } else {
               // Play error buzzer tone
               try {
@@ -251,7 +255,7 @@ export const DynamicQRScanner: React.FC<DynamicQRScannerProps> = ({
 
               setIsAnalyzingFace(false);
               setFaceScanProgress(0);
-              setFaceAnalysisError('Face verification failed! Photo does not match profile picture.');
+              setFaceAnalysisError(`Face mismatch (${result.confidenceScore}% match score). Selfie does not match registered profile.`);
             }
           } catch (err: any) {
             setIsAnalyzingFace(false);
@@ -576,9 +580,14 @@ export const DynamicQRScanner: React.FC<DynamicQRScannerProps> = ({
 
               {/* Verified Confirmation */}
               {scannedSuccess && (
-                <div className="absolute inset-0 bg-emerald-600/95 backdrop-blur-md flex flex-col items-center justify-center text-white space-y-2 animate-in zoom-in-95 z-30">
-                  <UserCheck className="w-16 h-16 animate-bounce text-white" />
+                <div className="absolute inset-0 bg-emerald-600/95 backdrop-blur-md flex flex-col items-center justify-center text-white space-y-2 animate-in zoom-in-95 z-30 p-4 text-center">
+                  <UserCheck className="w-14 h-14 animate-bounce text-white" />
                   <span className="text-lg font-black tracking-tight">Face Verified!</span>
+                  {faceMatchConfidence !== null && (
+                    <span className="px-3 py-1 rounded-full bg-emerald-700/80 border border-emerald-400 text-xs font-black text-emerald-100 font-mono">
+                      ⚡ {faceMatchConfidence}% Confidence • Groq Llama Vision
+                    </span>
+                  )}
                   <span className="text-xs text-emerald-100 font-bold">
                     Profile authenticated for {currentEmp.first_name} {currentEmp.last_name}
                   </span>

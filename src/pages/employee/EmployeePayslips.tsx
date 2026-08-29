@@ -403,6 +403,20 @@ export const EmployeePayslips: React.FC = () => {
           onClose={() => setIsPayslipModalOpen(false)}
           employee={currentEmp}
           month={selectedMonth}
+          payrollData={{
+            baseSalary: basicPay,
+            hra,
+            specialAllowance,
+            conveyance,
+            overtimeEarnings: performanceBonus,
+            grossSalary: totalEarnings,
+            pfDeduction: pf,
+            professionalTax,
+            tdsTax: tds,
+            leaveDeductions: medicalInsurance,
+            totalDeductions,
+            netPayable: netSalary,
+          }}
         />
       )}
     </div>

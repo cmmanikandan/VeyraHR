@@ -21,6 +21,7 @@ import {
 } from '../types/database';
 import { supabase } from '../lib/supabase';
 import { getOfflineQueue, processOfflineQueue, enqueueOfflineAttendance } from '../lib/offlineQueue';
+import { triggerAppNotification } from '../services/notificationService';
 
 interface DataContextType {
   employees: Employee[];
@@ -947,12 +948,12 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return newReq;
   };
 
-  const sendBrowserNotification = (title: string, body: string) => {
-    if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted') {
-      try {
-        new Notification(title, { body, icon: '/vite.svg' });
-      } catch {}
-    }
+  const sendBrowserNotification = (title: string, body: string, url?: string) => {
+    triggerAppNotification({
+      title,
+      body,
+      url: url || '/',
+    });
   };
 
   const updateLeaveStatus = async (requestId: string, status: 'Approved' | 'Rejected', comments?: string) => {
