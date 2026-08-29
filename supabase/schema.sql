@@ -519,11 +519,12 @@ INSERT INTO public.profiles (
   'hqLVEthP1kQTcanLBVdCUZ9xpoh1',
   'comp_veyra_tn',
   'Master Administrator',
-  'admin@veyrahr.com',
+  'manikandanprabhu1221@gmail.com',
   '+91 98765 00000',
   'admin',
   'Chennai HQ',
   'All Departments'
 ) ON CONFLICT (id) DO UPDATE SET
   role = 'admin',
+  email = EXCLUDED.email,
   full_name = EXCLUDED.full_name;
