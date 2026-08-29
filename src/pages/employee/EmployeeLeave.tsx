@@ -397,26 +397,57 @@ export const EmployeeLeave: React.FC = () => {
         )}
       </div>
 
-      {/* ─── 5. UPCOMING PUBLIC HOLIDAYS (LIVE SUPABASE SYNC) ───────────── */}
-      <div className="bg-white rounded-3xl p-5 border border-slate-200 shadow-sm space-y-3">
-        <h4 className="text-xs font-extrabold text-slate-900 uppercase tracking-wider">Company & Public Holidays</h4>
+      {/* ─── 5. UPCOMING PUBLIC HOLIDAYS (CHRONOLOGICAL & LIVE) ───────────── */}
+      <div className="bg-white rounded-3xl p-5 border border-slate-200 shadow-sm space-y-3.5">
+        <div className="flex items-center justify-between">
+          <div>
+            <h4 className="text-xs font-extrabold text-slate-900 uppercase tracking-wider">Upcoming Public & Corporate Holidays</h4>
+            <p className="text-[11px] text-slate-500 font-medium mt-0.5">Approved official paid holidays for 2026</p>
+          </div>
+          <span className="px-2.5 py-1 rounded-full bg-blue-50 text-blue-700 text-[10px] font-black font-mono border border-blue-200">
+            {companyHolidays.filter(h => h.holiday_date >= new Date().toISOString().split('T')[0]).length} Upcoming
+          </span>
+        </div>
+
         <div className="divide-y divide-slate-100">
-          {companyHolidays.map((h) => (
-            <div key={h.id} className="py-2.5 flex items-center justify-between first:pt-0 last:pb-0">
-              <div className="flex items-center gap-3">
-                <div className="w-9 h-9 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center shrink-0 border border-blue-100 font-extrabold text-xs">
-                  {h.holiday_date.split('-')[2]}
+          {companyHolidays
+            .filter((h) => h.holiday_date >= new Date().toISOString().split('T')[0])
+            .sort((a, b) => a.holiday_date.localeCompare(b.holiday_date))
+            .slice(0, 6)
+            .map((h) => {
+              const holDate = new Date(h.holiday_date);
+              const today = new Date(new Date().toISOString().split('T')[0]);
+              const diffDays = Math.ceil((holDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+              const countdown = diffDays === 0 ? 'Today 🎉' : diffDays === 1 ? 'Tomorrow' : `In ${diffDays} days`;
+              const monthName = holDate.toLocaleString('default', { month: 'short' });
+              const dayOfWeek = holDate.toLocaleString('default', { weekday: 'short' });
+
+              return (
+                <div key={h.id} className="py-3 flex items-center justify-between first:pt-0 last:pb-0">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-blue-50 to-indigo-50 text-blue-600 flex flex-col items-center justify-center shrink-0 border border-blue-100 shadow-2xs">
+                      <span className="text-[9px] font-black uppercase text-blue-400 leading-none">{monthName}</span>
+                      <span className="text-xs font-black text-blue-700 leading-none mt-0.5">{h.holiday_date.split('-')[2]}</span>
+                    </div>
+                    <div>
+                      <h5 className="text-xs font-bold text-slate-900 leading-tight">{h.name}</h5>
+                      <span className="text-[10px] text-slate-500 font-medium">
+                        {dayOfWeek}, {h.holiday_date} • Official Paid Holiday
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <span className="px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-700 border border-indigo-200 text-[10px] font-bold font-mono">
+                      {countdown}
+                    </span>
+                    <span className="px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 text-[10px] font-bold">
+                      Mandatory
+                    </span>
+                  </div>
                 </div>
-                <div>
-                  <h5 className="text-xs font-bold text-slate-900 leading-tight">{h.name}</h5>
-                  <span className="text-[10px] text-slate-500">{h.holiday_date} • Official Holiday</span>
-                </div>
-              </div>
-              <span className="px-2 py-0.5 rounded bg-emerald-50 text-emerald-700 border border-emerald-200 text-[10px] font-bold">
-                Holiday
-              </span>
-            </div>
-          ))}
+              );
+            })}
         </div>
       </div>
 

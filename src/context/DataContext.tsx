@@ -257,9 +257,21 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [auditLogs, setAuditLogs] = useState<AuditLog[]>([]);
   const [documents, setDocuments] = useState<EmployeeDocument[]>([]);
   const [companyHolidays, setCompanyHolidays] = useState<CompanyHoliday[]>([
-    { id: 'hol_1', company_id: 'comp_veyra_tn', name: 'Independence Day', holiday_date: '2026-08-15', is_optional: false },
-    { id: 'hol_2', company_id: 'comp_veyra_tn', name: 'Ganesh Chaturthi', holiday_date: '2026-09-14', is_optional: false },
-    { id: 'hol_3', company_id: 'comp_veyra_tn', name: 'Gandhi Jayanti', holiday_date: '2026-10-02', is_optional: false },
+    { id: 'hol_01', company_id: 'comp_veyra_tn', name: 'New Year’s Day', holiday_date: '2026-01-01', is_optional: false },
+    { id: 'hol_02', company_id: 'comp_veyra_tn', name: 'Pongal / Makar Sankranti', holiday_date: '2026-01-14', is_optional: false },
+    { id: 'hol_03', company_id: 'comp_veyra_tn', name: 'Republic Day India', holiday_date: '2026-01-26', is_optional: false },
+    { id: 'hol_04', company_id: 'comp_veyra_tn', name: 'Ugadi / Gudi Padwa', holiday_date: '2026-03-20', is_optional: false },
+    { id: 'hol_05', company_id: 'comp_veyra_tn', name: 'Good Friday', holiday_date: '2026-04-03', is_optional: false },
+    { id: 'hol_06', company_id: 'comp_veyra_tn', name: 'Tamil New Year & Ambedkar Jayanti', holiday_date: '2026-04-14', is_optional: false },
+    { id: 'hol_07', company_id: 'comp_veyra_tn', name: 'International Workers’ Day (May Day)', holiday_date: '2026-05-01', is_optional: false },
+    { id: 'hol_08', company_id: 'comp_veyra_tn', name: 'Bakrid / Eid al-Adha', holiday_date: '2026-05-27', is_optional: false },
+    { id: 'hol_09', company_id: 'comp_veyra_tn', name: 'Independence Day India', holiday_date: '2026-08-15', is_optional: false },
+    { id: 'hol_10', company_id: 'comp_veyra_tn', name: 'Krishna Janmashtami', holiday_date: '2026-09-04', is_optional: false },
+    { id: 'hol_11', company_id: 'comp_veyra_tn', name: 'Ganesh / Vinayakar Chaturthi', holiday_date: '2026-09-14', is_optional: false },
+    { id: 'hol_12', company_id: 'comp_veyra_tn', name: 'Gandhi Jayanti', holiday_date: '2026-10-02', is_optional: false },
+    { id: 'hol_13', company_id: 'comp_veyra_tn', name: 'Ayudha Pooja & Vijaya Dasami', holiday_date: '2026-10-19', is_optional: false },
+    { id: 'hol_14', company_id: 'comp_veyra_tn', name: 'Deepavali / Diwali', holiday_date: '2026-11-08', is_optional: false },
+    { id: 'hol_15', company_id: 'comp_veyra_tn', name: 'Christmas Day', holiday_date: '2026-12-25', is_optional: false },
   ]);
   const [isOffline, setIsOffline] = useState<boolean>(!navigator.onLine);
   const [offlineQueueLength, setOfflineQueueLength] = useState<number>(getOfflineQueue().length);
@@ -331,15 +343,25 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         try { localStorage.setItem('veyra_attendance', JSON.stringify(attData)); } catch {}
       }
 
-      // 4. Leave Requests
+      // 4. Leave Requests (Preserve all local leaves during merge so unsynced data is never deleted)
       const { data: leaveData, error: leaveErr } = await supabase
         .from('leave_requests')
         .select('*')
         .order('created_at', { ascending: false });
+
+      const localLeaves: LeaveRequest[] = JSON.parse(localStorage.getItem('veyra_leaves') || '[]');
+      const leaveMap = new Map<string, LeaveRequest>();
       if (!leaveErr && leaveData) {
-        setLeaveRequests(leaveData);
-        try { localStorage.setItem('veyra_leaves', JSON.stringify(leaveData)); } catch {}
+        leaveData.forEach((l: LeaveRequest) => leaveMap.set(l.id, l));
       }
+      localLeaves.forEach((l: LeaveRequest) => {
+        if (!leaveMap.has(l.id)) leaveMap.set(l.id, l);
+      });
+      const combinedLeaves = Array.from(leaveMap.values()).sort(
+        (a, b) => new Date(b.created_at || b.start_date).getTime() - new Date(a.created_at || a.start_date).getTime()
+      );
+      setLeaveRequests(combinedLeaves);
+      try { localStorage.setItem('veyra_leaves', JSON.stringify(combinedLeaves)); } catch {}
 
       // 5. Mood Pulse Logs
       const { data: moodData, error: moodErr } = await supabase
@@ -513,10 +535,48 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       )
       .subscribe();
 
+    // ── Realtime listener for leave requests (cross-device sync) ──
+    const leaveChannel = supabase
+      .channel('veyra-leaves-live')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'leave_requests' },
+        (payload) => {
+          if (payload.eventType === 'INSERT') {
+            const newLeave = payload.new as LeaveRequest;
+            if (!newLeave?.id) return;
+            setLeaveRequests((prev) => {
+              if (prev.some((l) => l.id === newLeave.id)) return prev;
+              const updated = [newLeave, ...prev];
+              try { localStorage.setItem('veyra_leaves', JSON.stringify(updated)); } catch {}
+              return updated;
+            });
+          } else if (payload.eventType === 'DELETE') {
+            const oldId = payload.old?.id;
+            if (!oldId) return;
+            setLeaveRequests((prev) => {
+              const updated = prev.filter((l) => l.id !== oldId);
+              try { localStorage.setItem('veyra_leaves', JSON.stringify(updated)); } catch {}
+              return updated;
+            });
+          } else if (payload.eventType === 'UPDATE') {
+            const updatedLeave = payload.new as LeaveRequest;
+            if (!updatedLeave?.id) return;
+            setLeaveRequests((prev) => {
+              const updated = prev.map((l) => (l.id === updatedLeave.id ? { ...l, ...updatedLeave } : l));
+              try { localStorage.setItem('veyra_leaves', JSON.stringify(updated)); } catch {}
+              return updated;
+            });
+          }
+        }
+      )
+      .subscribe();
+
     return () => {
       supabase.removeChannel(attendanceChannel);
       supabase.removeChannel(branchChannel);
       supabase.removeChannel(employeeChannel);
+      supabase.removeChannel(leaveChannel);
     };
   }, []);
 
@@ -964,6 +1024,42 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return updatedRecord!;
   };
 
+  const sendBrowserNotification = (title: string, body: string, url?: string, category: string = 'System') => {
+    triggerAppNotification({
+      title,
+      body,
+      url: url || '/',
+    });
+
+    const newNotif: NotificationItem = {
+      id: `notif_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+      recipient_profile_id: 'all',
+      title,
+      message: body,
+      type: (category as any) || 'System',
+      created_at: new Date().toISOString(),
+      is_read: false,
+      link_url: url || '/',
+    };
+
+    setNotifications((prev) => {
+      const updated = [newNotif, ...prev];
+      try { localStorage.setItem('veyra_notifications', JSON.stringify(updated)); } catch {}
+      return updated;
+    });
+
+    // Native mobile / browser vibration and notification
+    if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted') {
+      try {
+        new Notification(title, {
+          body,
+          icon: '/favicon.ico',
+        });
+        if ('vibrate' in navigator) navigator.vibrate([150, 60, 150]);
+      } catch {}
+    }
+  };
+
   const submitLeaveRequest = async (req: Omit<LeaveRequest, 'id' | 'status' | 'created_at'>): Promise<LeaveRequest> => {
     const newReq: LeaveRequest = {
       ...req,
@@ -972,45 +1068,72 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       created_at: new Date().toISOString(),
     };
 
-    try {
-      await supabase.from('leave_requests').insert(newReq);
-    } catch (e) {
-      console.warn('Leave request sync:', e);
-    }
-
+    // 1. Immediately store in local state and localStorage
     setLeaveRequests((prev) => {
-      const updated = [newReq, ...prev];
+      const updated = [newReq, ...prev.filter((l) => l.id !== newReq.id)];
       try { localStorage.setItem('veyra_leaves', JSON.stringify(updated)); } catch {}
       return updated;
     });
+
+    // 2. Persist to Supabase Database
+    try {
+      const dbPayload = {
+        id: newReq.id,
+        employee_id: newReq.employee_id,
+        employee_name: newReq.employee_name || 'Employee',
+        company_id: newReq.company_id || 'comp_veyra_tn',
+        leave_type_name: newReq.leave_type_name || 'Casual Leave',
+        start_date: newReq.start_date,
+        end_date: newReq.end_date,
+        total_days: Number(newReq.total_days) || 1,
+        reason: newReq.reason,
+        status: 'Pending',
+        created_at: newReq.created_at,
+      };
+
+      const { error: dbErr } = await supabase.from('leave_requests').upsert(dbPayload);
+      if (dbErr) {
+        console.warn('Supabase leave_requests sync notice:', dbErr);
+      }
+    } catch (e) {
+      console.warn('Leave request sync notice:', e);
+    }
+
+    // 3. Dispatch multi-channel notification to Unified Inbox & Mobile
+    sendBrowserNotification(
+      'Leave Application Submitted',
+      `Your request for ${newReq.leave_type_name} (${newReq.total_days}d) from ${newReq.start_date} to ${newReq.end_date} has been submitted for HR approval.`,
+      '/employee/leave',
+      'Leave'
+    );
+
     return newReq;
   };
 
-  const sendBrowserNotification = (title: string, body: string, url?: string) => {
-    triggerAppNotification({
-      title,
-      body,
-      url: url || '/',
-    });
-  };
-
   const updateLeaveStatus = async (requestId: string, status: 'Approved' | 'Rejected', comments?: string) => {
-    // Persist to Supabase
+    // 1. Persist to Supabase
     try {
       await supabase
         .from('leave_requests')
         .update({ status, hr_comments: comments })
         .eq('id', requestId);
-    } catch (e) { console.warn('Leave status sync:', e); }
+    } catch (e) {
+      console.warn('Leave status sync notice:', e);
+    }
+
+    // 2. Update local state & localStorage
     setLeaveRequests((prev) => {
       const updated = prev.map((l) => (l.id === requestId ? { ...l, status, hr_comments: comments } : l));
       try { localStorage.setItem('veyra_leaves', JSON.stringify(updated)); } catch {}
       return updated;
     });
 
+    // 3. Dispatch notification
     sendBrowserNotification(
       `Leave Request ${status}!`,
-      `Your time-off application was ${status.toLowerCase()} by HR Operations.`
+      `Your time-off application was ${status.toLowerCase()} by HR Operations. ${comments ? `Feedback: ${comments}` : ''}`,
+      '/employee/leave',
+      'Leave'
     );
   };
 

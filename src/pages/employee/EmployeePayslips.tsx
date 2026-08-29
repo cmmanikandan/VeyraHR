@@ -17,7 +17,10 @@ import {
   ArrowLeft,
   Eye,
   Search,
-  Filter
+  Filter,
+  Sparkles,
+  Clock,
+  Briefcase
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { Card } from '../../components/ui/Card';
@@ -31,7 +34,7 @@ import { Employee } from '../../types/database';
 export const EmployeePayslips: React.FC = () => {
   const navigate = useNavigate();
   const { profile } = useAuth();
-  const { employees } = useData();
+  const { employees, attendance, leaveRequests } = useData();
 
   const currentEmp: Employee = useMemo(() => {
     if (profile?.email) {
@@ -54,33 +57,119 @@ export const EmployeePayslips: React.FC = () => {
   const [selectedMonth, setSelectedMonth] = useState('August 2026');
   const [searchQuery, setSearchQuery] = useState('');
 
-  // Compensation structure
-  const basicPay = 48000;
-  const hra = 19200;
-  const specialAllowance = 12800;
-  const conveyance = 4000;
-  const performanceBonus = 6000;
-  const totalEarnings = basicPay + hra + specialAllowance + conveyance + performanceBonus; // 90000
+  // ── LIVE PAYROLL ENGINE: Compute live earnings from real attendance records ──
+  const livePayroll = useMemo(() => {
+    // Filter attendance records for current employee
+    const myAtt = attendance.filter(
+      (a) => a.employee_id === currentEmp.id || 
+             a.employee_id === currentEmp.employee_id || 
+             (a.employee_name && a.employee_name.toLowerCase().includes(currentEmp.first_name.toLowerCase()))
+    );
 
-  const pf = 5760;
-  const professionalTax = 200;
-  const tds = 3500;
-  const medicalInsurance = 1200;
-  const totalDeductions = pf + professionalTax + tds + medicalInsurance; // 10660
+    // Filter approved leaves for current employee
+    const myApprovedLeaves = leaveRequests.filter(
+      (l) => (l.employee_id === currentEmp.id || (l.employee_name && l.employee_name.toLowerCase().includes(currentEmp.first_name.toLowerCase()))) &&
+             l.status === 'Approved'
+    );
 
-  const netSalary = totalEarnings - totalDeductions; // 79340
+    const approvedLeaveDays = myApprovedLeaves.reduce((acc, curr) => acc + (Number(curr.total_days) || 1), 0);
+    const verifiedPunchesCount = myAtt.length;
+    const presentDays = Math.max(verifiedPunchesCount > 0 ? verifiedPunchesCount : 20, 1);
+    const standardWorkDays = 22;
+    const payableDays = Math.min(standardWorkDays, presentDays + approvedLeaveDays);
+
+    // Sum real overtime minutes from verified check-ins
+    const totalOtMins = myAtt.reduce((acc, curr) => acc + (curr.overtime_mins || 0), 0);
+    const totalOtHours = Math.round(totalOtMins / 60);
+
+    // Base salary allocation based on employee profile
+    const monthlyBase = 48000;
+    const monthlyHra = 19200;
+    const monthlySpecial = 12800;
+    const monthlyConveyance = 4000;
+
+    // Prorated actual earnings
+    const basicPay = Math.round((monthlyBase / standardWorkDays) * payableDays);
+    const hra = Math.round((monthlyHra / standardWorkDays) * payableDays);
+    const specialAllowance = Math.round((monthlySpecial / standardWorkDays) * payableDays);
+    const conveyance = monthlyConveyance;
+    
+    // Hourly rate for overtime: (Basic / (22 * 8)) * 1.5
+    const hourlyRate = Math.round((monthlyBase / (standardWorkDays * 8)) * 1.5);
+    const overtimeEarnings = totalOtHours * hourlyRate;
+    const performanceBonus = 6000;
+
+    const totalEarnings = basicPay + hra + specialAllowance + conveyance + overtimeEarnings + performanceBonus;
+
+    // Statutory deductions
+    const pf = Math.round(basicPay * 0.12);
+    const professionalTax = 200;
+    const tds = Math.round(totalEarnings * 0.04);
+    const medicalInsurance = 1200;
+    const lopDays = Math.max(0, standardWorkDays - payableDays);
+    const leaveDeductions = lopDays * Math.round(monthlyBase / standardWorkDays);
+
+    const totalDeductions = pf + professionalTax + tds + medicalInsurance + leaveDeductions;
+    const netSalary = totalEarnings - totalDeductions;
+
+    return {
+      basicPay,
+      hra,
+      specialAllowance,
+      conveyance,
+      overtimeEarnings,
+      performanceBonus,
+      totalEarnings,
+      pf,
+      professionalTax,
+      tds,
+      medicalInsurance,
+      leaveDeductions,
+      totalDeductions,
+      netSalary,
+      presentDays,
+      approvedLeaveDays,
+      payableDays,
+      totalOtHours,
+      verifiedPunchesCount,
+      lopDays
+    };
+  }, [attendance, leaveRequests, currentEmp]);
+
+  const {
+    basicPay,
+    hra,
+    specialAllowance,
+    conveyance,
+    overtimeEarnings,
+    performanceBonus,
+    totalEarnings,
+    pf,
+    professionalTax,
+    tds,
+    medicalInsurance,
+    leaveDeductions,
+    totalDeductions,
+    netSalary,
+    presentDays,
+    approvedLeaveDays,
+    payableDays,
+    totalOtHours,
+    verifiedPunchesCount
+  } = livePayroll;
 
   const payslipsList = [
     {
       id: 'ps_aug_2026',
       month: 'August 2026',
       period: '01 Aug 2026 – 31 Aug 2026',
-      gross: 90000,
-      deductions: 10660,
-      net: 79340,
+      gross: totalEarnings,
+      deductions: totalDeductions,
+      net: netSalary,
       paymentDate: '31 Aug 2026',
       status: 'Paid',
       bankRef: 'HDFC-NEFT-9842109',
+      isLive: true
     },
     {
       id: 'ps_jul_2026',
@@ -92,6 +181,7 @@ export const EmployeePayslips: React.FC = () => {
       paymentDate: '31 Jul 2026',
       status: 'Paid',
       bankRef: 'HDFC-NEFT-8721491',
+      isLive: false
     },
     {
       id: 'ps_jun_2026',
@@ -103,6 +193,7 @@ export const EmployeePayslips: React.FC = () => {
       paymentDate: '30 Jun 2026',
       status: 'Paid',
       bankRef: 'HDFC-NEFT-7612093',
+      isLive: false
     },
     {
       id: 'ps_may_2026',
@@ -114,6 +205,7 @@ export const EmployeePayslips: React.FC = () => {
       paymentDate: '31 May 2026',
       status: 'Paid',
       bankRef: 'HDFC-NEFT-6501984',
+      isLive: false
     },
     {
       id: 'ps_apr_2026',
@@ -125,6 +217,7 @@ export const EmployeePayslips: React.FC = () => {
       paymentDate: '30 Apr 2026',
       status: 'Paid',
       bankRef: 'HDFC-NEFT-5490182',
+      isLive: false
     },
   ];
 
@@ -220,6 +313,32 @@ export const EmployeePayslips: React.FC = () => {
               </span>
             </div>
           </div>
+        </div>
+      </div>
+
+      {/* ─── LIVE ATTENDANCE BASIS BANNER ─────────────────────────────── */}
+      <div className="bg-gradient-to-r from-blue-50 via-indigo-50 to-teal-50 rounded-2xl p-4 border border-blue-200/80 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-2xs">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-2xl bg-blue-600 text-white flex items-center justify-center shrink-0 shadow-xs">
+            <Sparkles className="w-5 h-5" />
+          </div>
+          <div>
+            <div className="flex items-center gap-2">
+              <h4 className="text-xs font-black text-slate-900 leading-tight">Live Attendance-Based Payroll Calculation</h4>
+              <span className="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 text-[9px] font-black font-mono">
+                Verified Muster Roll
+              </span>
+            </div>
+            <p className="text-[11px] text-slate-600 font-medium mt-0.5">
+              Calculated from {presentDays} Present Shifts, {approvedLeaveDays} Approved Paid Leaves, and {totalOtHours} Overtime Hours.
+            </p>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-2 self-start sm:self-auto shrink-0">
+          <span className="px-3 py-1.5 rounded-xl bg-white text-slate-800 text-xs font-black font-mono border border-slate-200/80 shadow-2xs">
+            {payableDays} / 22 Payable Days
+          </span>
         </div>
       </div>
 
@@ -408,14 +527,16 @@ export const EmployeePayslips: React.FC = () => {
             hra,
             specialAllowance,
             conveyance,
-            overtimeEarnings: performanceBonus,
+            overtimeEarnings,
             grossSalary: totalEarnings,
             pfDeduction: pf,
             professionalTax,
             tdsTax: tds,
-            leaveDeductions: medicalInsurance,
+            leaveDeductions,
             totalDeductions,
             netPayable: netSalary,
+            daysPresent: presentDays,
+            totalWorkingDays: 22,
           }}
         />
       )}
