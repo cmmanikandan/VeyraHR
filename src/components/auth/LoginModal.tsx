@@ -81,15 +81,21 @@ export const LoginModal: React.FC<LoginModalProps> = ({
     }
   }, [isOpen]);
 
+  // Centralized list of admin emails / IDs
+  const ADMIN_EMAILS = [
+    'manikandanprabhu37@gmail.com',
+    'manikandanprabhu1221@gmail.com',
+    'hqlvethp1kqtcanlbvdcuz9xpoh1',
+    'admin001',
+    'adm001',
+  ];
+
   // Determine user role based on email/ID credentials and initialRole
   const detectUserRole = (cleanInput: string): RoleType => {
-    // 1. Check Admin IDs & Emails
+    // 1. Check Admin IDs & Emails FIRST (highest priority)
     if (
       cleanInput.includes('admin') || 
-      cleanInput === 'admin001' || 
-      cleanInput === 'adm001' || 
-      cleanInput === 'manikandanprabhu1221@gmail.com' ||
-      cleanInput === 'hqlvethp1kqtcanlbvdcuz9xpoh1'
+      ADMIN_EMAILS.includes(cleanInput)
     ) return 'admin';
 
     // 2. Check HR Manager Roster & IDs
@@ -176,12 +182,12 @@ export const LoginModal: React.FC<LoginModalProps> = ({
 
       const isAdminAccount = 
         cleanInput.includes('admin') || 
-        cleanInput === 'adm001' || 
-        cleanInput === 'admin001' || 
-        cleanInput === 'manikandanprabhu1221@gmail.com' ||
-        cleanInput === 'hqlvethp1kqtcanlbvdcuz9xpoh1';
+        ADMIN_EMAILS.includes(cleanInput);
 
-      const isRegisteredAccount = !!empMatch || !!hrMatch || isAdminAccount || initialRole === 'employee';
+      // If admin email, don't treat them as HR even if they appear in hr_managers table
+      const effectiveHrMatch = isAdminAccount ? null : hrMatch;
+
+      const isRegisteredAccount = !!empMatch || !!effectiveHrMatch || isAdminAccount || initialRole === 'employee';
 
       if (!isRegisteredAccount) {
         throw new Error('USER_NOT_FOUND');
@@ -214,6 +220,7 @@ export const LoginModal: React.FC<LoginModalProps> = ({
       if (isAdminAccount || determinedRole === 'admin') {
         isPasswordValid = 
           cleanPwd === 'CMMANI02' || 
+          cleanPwd === 'CMMANI@02cm' ||
           cleanPwd === 'admin123' || 
           cleanPwd === 'admin' || 
           cleanPwd === 'Veyra#2026' || 
@@ -226,8 +233,8 @@ export const LoginModal: React.FC<LoginModalProps> = ({
           email: cleanInput.includes('@') ? cleanInput : 'manikandanprabhu1221@gmail.com',
           displayName: 'Master Administrator',
         };
-      } else if (hrMatch || determinedRole === 'hr_manager') {
-        const expectedHrPassword = (hrMatch as any)?.password || hrCredMap[cleanInput];
+      } else if (effectiveHrMatch || determinedRole === 'hr_manager') {
+        const expectedHrPassword = (effectiveHrMatch as any)?.password || hrCredMap[cleanInput];
         isPasswordValid = 
           (expectedHrPassword && cleanPwd === expectedHrPassword) ||
           cleanPwd === 'hr123' || 
@@ -239,9 +246,9 @@ export const LoginModal: React.FC<LoginModalProps> = ({
           throw new Error('WRONG_HR_PASSWORD');
         }
         userObj = {
-          uid: hrMatch?.id || `hr_${Date.now()}`,
-          email: hrMatch?.email || (cleanInput.includes('@') ? cleanInput : 'hr.operations@veyrahr.com'),
-          displayName: hrMatch?.full_name || 'HR Operations Manager',
+          uid: effectiveHrMatch?.id || `hr_${Date.now()}`,
+          email: effectiveHrMatch?.email || (cleanInput.includes('@') ? cleanInput : 'hr.operations@veyrahr.com'),
+          displayName: effectiveHrMatch?.full_name || 'HR Operations Manager',
         };
       } else if (isEmployeeRole) {
         const expectedEmpPassword = (empMatch as any)?.password || credMap[cleanInput];

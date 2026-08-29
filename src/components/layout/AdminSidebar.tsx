@@ -11,7 +11,8 @@ import {
   LayoutDashboard, 
   LogOut,
   ChevronLeft,
-  ChevronRight
+  ChevronRight,
+  X
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { VeyraBrandHeader } from '../common/VeyraBrandHeader';
@@ -19,11 +20,15 @@ import { VeyraBrandHeader } from '../common/VeyraBrandHeader';
 interface AdminSidebarProps {
   isCollapsed: boolean;
   onToggleCollapse: () => void;
+  mobileOpen: boolean;
+  onCloseMobile: () => void;
 }
 
 export const AdminSidebar: React.FC<AdminSidebarProps> = ({
   isCollapsed,
   onToggleCollapse,
+  mobileOpen,
+  onCloseMobile,
 }) => {
   const { profile, logout } = useAuth();
   const navigate = useNavigate();
@@ -44,12 +49,8 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
     { label: 'Company Settings', path: '/admin/settings', icon: Settings },
   ];
 
-  return (
-    <aside
-      className={`bg-[#F7F5F2] border-r border-[#E8E2D9] h-screen sticky top-0 flex flex-col justify-between transition-all duration-300 z-30 ${
-        isCollapsed ? 'w-20' : 'w-64'
-      }`}
-    >
+  const SidebarContent = () => (
+    <div className="flex flex-col h-full">
       {/* BRANDING HEADER */}
       <div>
         <div className="p-4 border-b border-[#E8E2D9] flex items-center justify-between">
@@ -59,12 +60,22 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
             <VeyraBrandHeader size="sm" subtitle="ADMIN PORTAL" />
           )}
 
+          {/* Desktop collapse toggle */}
           <button
             type="button"
             onClick={onToggleCollapse}
-            className="p-1.5 rounded-xl hover:bg-white border border-transparent hover:border-veyra-border text-veyra-text-sub transition-colors"
+            className="hidden md:block p-1.5 rounded-xl hover:bg-white border border-transparent hover:border-veyra-border text-veyra-text-sub transition-colors"
           >
             {isCollapsed ? <ChevronRight className="w-4 h-4" /> : <ChevronLeft className="w-4 h-4" />}
+          </button>
+
+          {/* Mobile close button */}
+          <button
+            type="button"
+            onClick={onCloseMobile}
+            className="md:hidden p-1.5 rounded-xl hover:bg-white border border-transparent hover:border-veyra-border text-veyra-text-sub transition-colors"
+          >
+            <X className="w-4 h-4" />
           </button>
         </div>
 
@@ -76,6 +87,7 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
               <NavLink
                 key={item.path}
                 to={item.path}
+                onClick={onCloseMobile}
                 className={({ isActive }) =>
                   `flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-bold transition-all ${
                     isActive
@@ -85,7 +97,7 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
                 }
               >
                 <Icon className="w-4 h-4 shrink-0" />
-                {!isCollapsed && <span className="truncate">{item.label}</span>}
+                {(!isCollapsed || mobileOpen) && <span className="truncate">{item.label}</span>}
               </NavLink>
             );
           })}
@@ -93,12 +105,12 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
       </div>
 
       {/* USER PROFILE & LOGOUT */}
-      <div className="p-3 border-t border-[#E8E2D9] space-y-2">
+      <div className="mt-auto p-3 border-t border-[#E8E2D9] space-y-2">
         <div className="flex items-center gap-3 p-2 rounded-xl bg-white border border-veyra-border">
           <div className="w-8 h-8 rounded-full bg-veyra-navy text-white text-xs font-bold flex items-center justify-center shrink-0">
             {profile?.full_name?.charAt(0) || 'A'}
           </div>
-          {!isCollapsed && (
+          {(!isCollapsed || mobileOpen) && (
             <div className="truncate text-left">
               <span className="text-xs font-extrabold text-veyra-text block truncate">
                 {profile?.full_name || 'System Admin'}
@@ -114,9 +126,38 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
           className="w-full flex items-center justify-center gap-2 p-2.5 rounded-xl text-xs font-bold text-veyra-danger hover:bg-red-50 transition-colors border border-transparent hover:border-red-200"
         >
           <LogOut className="w-4 h-4 shrink-0" />
-          {!isCollapsed && <span>Exit Portal</span>}
+          {(!isCollapsed || mobileOpen) && <span>Exit Portal</span>}
         </button>
       </div>
-    </aside>
+    </div>
+  );
+
+  return (
+    <>
+      {/* ── DESKTOP SIDEBAR ── always visible, collapsible */}
+      <aside
+        className={`hidden md:flex bg-[#F7F5F2] border-r border-[#E8E2D9] h-screen sticky top-0 flex-col justify-between transition-all duration-300 z-30 ${
+          isCollapsed ? 'w-20' : 'w-64'
+        }`}
+      >
+        <SidebarContent />
+      </aside>
+
+      {/* ── MOBILE DRAWER OVERLAY ── slides in from left */}
+      {mobileOpen && (
+        <div
+          className="fixed inset-0 bg-black/40 z-40 md:hidden"
+          onClick={onCloseMobile}
+          aria-hidden="true"
+        />
+      )}
+      <aside
+        className={`fixed top-0 left-0 h-full w-72 bg-[#F7F5F2] border-r border-[#E8E2D9] z-50 flex flex-col transition-transform duration-300 ease-in-out md:hidden ${
+          mobileOpen ? 'translate-x-0' : '-translate-x-full'
+        }`}
+      >
+        <SidebarContent />
+      </aside>
+    </>
   );
 };
