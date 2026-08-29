@@ -722,30 +722,30 @@ export const CompanyOnboardingWizard: React.FC<CompanyOnboardingWizardProps> = (
         </div>
       ) : (
         /* 3. MAIN FULL-PAGE ONBOARDING WIZARD */
-        <div className="max-w-5xl mx-auto w-full px-4 sm:px-8 py-8 sm:py-10 flex-1 flex flex-col justify-between">
+        <div className="max-w-5xl mx-auto w-full px-4 sm:px-8 py-6 sm:py-10 flex-1 flex flex-col justify-between overflow-x-hidden">
           {/* TOP FULL PAGE HEADER */}
           <div className="pb-6 mb-6 border-b border-veyra-border/80">
-            <div className="flex items-center justify-between mb-5">
+            <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 mb-5">
               <div className="flex items-center gap-3.5">
                 <div className="w-12 h-12 rounded-2xl bg-veyra-blue-soft border border-veyra-blue-border/60 p-1.5 flex items-center justify-center shrink-0 shadow-2xs">
                   <img src={logoUrl || "/logo.png"} alt="Logo" className="w-8 h-8 object-contain" />
                 </div>
                 <div>
-                  <h2 className="text-2xl font-extrabold text-veyra-text tracking-tight">
+                  <h2 className="text-xl sm:text-2xl font-extrabold text-veyra-text tracking-tight">
                     {stepTitles[step].title}
                   </h2>
                   <p className="text-xs sm:text-sm text-veyra-text-sub font-medium">{stepTitles[step].subtitle}</p>
                 </div>
               </div>
 
-              <div className="flex items-center gap-3">
-                <Badge variant="blue" size="sm" icon={<Save className="w-3.5 h-3.5 text-veyra-blue" />}>
+              <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
+                <Badge variant="blue" size="sm" icon={<Save className="w-3.5 h-3.5 text-veyra-blue" />} className="hidden sm:inline-flex">
                   {autoSaveStatus}
                 </Badge>
                 <button
                   type="button"
                   onClick={onClose}
-                  className="px-3.5 py-2 text-xs font-bold text-veyra-danger hover:bg-red-50 border border-red-200/80 rounded-xl transition-colors shadow-2xs flex items-center gap-1.5"
+                  className="px-3 py-1.5 sm:px-3.5 sm:py-2 text-xs font-bold text-veyra-danger hover:bg-red-50 border border-red-200/80 rounded-xl transition-colors shadow-2xs flex items-center gap-1.5"
                 >
                   <X className="w-3.5 h-3.5 text-veyra-danger" />
                   Cancel Setup
@@ -753,7 +753,7 @@ export const CompanyOnboardingWizard: React.FC<CompanyOnboardingWizardProps> = (
                 <button
                   type="button"
                   onClick={onClose}
-                  className="px-4 py-2 text-xs font-bold text-veyra-text-sub hover:text-veyra-text bg-white hover:bg-veyra-bg-secondary border border-veyra-border rounded-xl transition-colors shadow-2xs"
+                  className="px-3 py-1.5 sm:px-4 sm:py-2 text-xs font-bold text-veyra-text-sub hover:text-veyra-text bg-white hover:bg-veyra-bg-secondary border border-veyra-border rounded-xl transition-colors shadow-2xs"
                 >
                   Save & Exit
                 </button>
@@ -774,21 +774,21 @@ export const CompanyOnboardingWizard: React.FC<CompanyOnboardingWizardProps> = (
               </div>
 
               {/* 8 Clickable Step Indicator Circles */}
-              <div className="flex items-center justify-between pt-2">
+              <div className="flex items-center justify-between gap-1 overflow-x-auto pb-2 scrollbar-none">
                 {[1, 2, 3, 4, 5, 6, 7, 8].map((s) => (
                   <button
                     key={s}
                     type="button"
                     onClick={() => s < step && setStep(s)}
-                    className={`w-9 h-9 rounded-full text-xs font-extrabold flex items-center justify-center transition-all ${
+                    className={`w-8 h-8 sm:w-9 sm:h-9 rounded-full text-xs font-extrabold flex items-center justify-center shrink-0 transition-all ${
                       s === step
-                        ? 'bg-veyra-blue text-white ring-4 ring-veyra-blue/20 scale-110 shadow-xs'
+                        ? 'bg-veyra-blue text-white ring-4 ring-veyra-blue/20 scale-105 sm:scale-115 shadow-xs'
                         : s < step
                         ? 'bg-emerald-500 text-white cursor-pointer hover:bg-emerald-600'
                         : 'bg-white text-slate-400 border border-veyra-border'
                     }`}
                   >
-                    {s < step ? <Check className="w-4 h-4" /> : s}
+                    {s < step ? <Check className="w-3.5 h-3.5" /> : s}
                   </button>
                 ))}
               </div>

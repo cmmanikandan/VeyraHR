@@ -136,7 +136,6 @@ export const LoginModal: React.FC<LoginModalProps> = ({
 
     try {
       const cleanInput = email.trim().toLowerCase();
-      const determinedRole = detectUserRole(cleanInput);
 
       // 1. Match against registered database roster by Email, Login ID or Employee Code
       let empMatch = employees.find(
@@ -184,11 +183,31 @@ export const LoginModal: React.FC<LoginModalProps> = ({
         cleanInput.includes('admin') || 
         ADMIN_EMAILS.includes(cleanInput);
 
-      // If admin email, don't treat them as HR even if they appear in hr_managers table
-      const effectiveHrMatch = isAdminAccount ? null : hrMatch;
+      // Strict role detection
+      let actualUserRole: RoleType | null = null;
+      if (isAdminAccount) {
+        actualUserRole = 'admin';
+      } else if (hrMatch) {
+        actualUserRole = 'hr_manager';
+      } else if (empMatch) {
+        actualUserRole = 'employee';
+      }
 
-      const isRegisteredAccount = !!empMatch || !!effectiveHrMatch || isAdminAccount || initialRole === 'employee';
+      // If initialRole is specified (from clicked sign in button), enforce strict matching
+      if (initialRole === 'admin' && actualUserRole !== 'admin') {
+        throw new Error('USER_NOT_FOUND');
+      }
+      if (initialRole === 'hr_manager' && actualUserRole !== 'hr_manager') {
+        throw new Error('USER_NOT_FOUND');
+      }
+      if (initialRole === 'employee' && actualUserRole !== 'employee') {
+        throw new Error('USER_NOT_FOUND');
+      }
 
+      // Determine final targeted role
+      const targetRole = initialRole || actualUserRole || 'employee';
+
+      const isRegisteredAccount = !!empMatch || !!hrMatch || isAdminAccount || targetRole === 'employee';
       if (!isRegisteredAccount) {
         throw new Error('USER_NOT_FOUND');
       }
@@ -215,9 +234,7 @@ export const LoginModal: React.FC<LoginModalProps> = ({
         }
       })();
 
-      const isEmployeeRole = determinedRole === 'employee' || !!empMatch || initialRole === 'employee';
-
-      if (isAdminAccount || determinedRole === 'admin') {
+      if (targetRole === 'admin') {
         isPasswordValid = 
           cleanPwd === 'CMMANI02' || 
           cleanPwd === 'CMMANI@02cm' ||
@@ -230,11 +247,11 @@ export const LoginModal: React.FC<LoginModalProps> = ({
         }
         userObj = {
           uid: 'hqLVEthP1kQTcanLBVdCUZ9xpoh1',
-          email: cleanInput.includes('@') ? cleanInput : 'manikandanprabhu1221@gmail.com',
+          email: cleanInput.includes('@') ? cleanInput : 'manikandanprabhu37@gmail.com',
           displayName: 'Master Administrator',
         };
-      } else if (effectiveHrMatch || determinedRole === 'hr_manager') {
-        const expectedHrPassword = (effectiveHrMatch as any)?.password || hrCredMap[cleanInput];
+      } else if (targetRole === 'hr_manager') {
+        const expectedHrPassword = (hrMatch as any)?.password || hrCredMap[cleanInput];
         isPasswordValid = 
           (expectedHrPassword && cleanPwd === expectedHrPassword) ||
           cleanPwd === 'hr123' || 
@@ -246,11 +263,12 @@ export const LoginModal: React.FC<LoginModalProps> = ({
           throw new Error('WRONG_HR_PASSWORD');
         }
         userObj = {
-          uid: effectiveHrMatch?.id || `hr_${Date.now()}`,
-          email: effectiveHrMatch?.email || (cleanInput.includes('@') ? cleanInput : 'hr.operations@veyrahr.com'),
-          displayName: effectiveHrMatch?.full_name || 'HR Operations Manager',
+          uid: hrMatch?.id || `hr_${Date.now()}`,
+          email: hrMatch?.email || (cleanInput.includes('@') ? cleanInput : 'hr.operations@veyrahr.com'),
+          displayName: hrMatch?.full_name || 'HR Operations Manager',
         };
-      } else if (isEmployeeRole) {
+      } else {
+        // employee
         const expectedEmpPassword = (empMatch as any)?.password || credMap[cleanInput];
         isPasswordValid = 
           (expectedEmpPassword && cleanPwd === expectedEmpPassword) ||
@@ -272,7 +290,7 @@ export const LoginModal: React.FC<LoginModalProps> = ({
       }
 
       // ─── OPTION A: EMPLOYEE DIRECT LOGIN (NO OTP) ──────────────────────
-      if (isEmployeeRole) {
+      if (targetRole === 'employee') {
         setProfile({
           id: userObj.uid,
           company_id: 'comp_veyra_tn',
@@ -302,7 +320,7 @@ export const LoginModal: React.FC<LoginModalProps> = ({
       const code = Math.floor(100000 + Math.random() * 900000).toString();
       setGeneratedOtp(code);
       setPendingUser(userObj);
-      setPendingRole(determinedRole);
+      setPendingRole(targetRole);
       setOtpDigits(['', '', '', '', '', '']);
       setOtpError(null);
 
@@ -311,7 +329,7 @@ export const LoginModal: React.FC<LoginModalProps> = ({
         toEmail: userObj.email,
         recipientName: userObj.displayName,
         otpCode: code,
-        role: determinedRole === 'admin' ? 'admin' : 'hr_manager',
+        role: targetRole === 'admin' ? 'admin' : 'hr_manager',
       });
 
       // Transition smoothly to Step 2: OTP Verification for Admin/HR

@@ -150,6 +150,15 @@ export const EmployeeDocuments: React.FC = () => {
   };
 
   const handleDownload = (doc: EmployeeDocument) => {
+    if (doc.custom_image_url) {
+      // If it's a data URL, we can download it directly
+      const a = document.createElement('a');
+      a.href = doc.custom_image_url;
+      a.download = doc.file_name;
+      a.click();
+      return;
+    }
+
     const content = `========================================================\n` +
       `VEYRA HR DIGITAL VAULT - OFFICIAL DOCUMENT PROOF\n` +
       `========================================================\n` +
@@ -420,13 +429,11 @@ export const EmployeeDocuments: React.FC = () => {
                   if (e.target.files && e.target.files[0]) {
                     const file = e.target.files[0];
                     setNewFileName(file.name);
-                    if (file.type.startsWith('image/')) {
-                      const reader = new FileReader();
-                      reader.onload = () => {
-                        setNewCustomImage(reader.result as string);
-                      };
-                      reader.readAsDataURL(file);
-                    }
+                    const reader = new FileReader();
+                    reader.onload = () => {
+                      setNewCustomImage(reader.result as string);
+                    };
+                    reader.readAsDataURL(file);
                   }
                 }}
                 className="text-xs text-slate-500 file:mr-2 file:py-1 file:px-3 file:rounded-xl file:border-0 file:text-xs file:font-bold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
@@ -463,11 +470,25 @@ export const EmployeeDocuments: React.FC = () => {
                 <ShieldCheck className="w-64 h-64 text-blue-900" />
               </div>
 
-              {/* Document Type Specific Proof Layout */}
+               {/* Document Type Specific Proof Layout */}
               {viewingDoc.custom_image_url ? (
-                <div className="rounded-2xl overflow-hidden border border-slate-200 max-h-72 flex items-center justify-center bg-black/5">
-                  <img src={viewingDoc.custom_image_url} alt="Proof" className="w-full h-full object-contain" />
-                </div>
+                viewingDoc.custom_image_url.startsWith('data:application/pdf') || viewingDoc.file_name.endsWith('.pdf') ? (
+                  <div className="rounded-2xl overflow-hidden border border-slate-200 h-96 bg-black/5">
+                    <iframe
+                      src={viewingDoc.custom_image_url}
+                      title="PDF Document Proof"
+                      className="w-full h-full border-none"
+                    />
+                  </div>
+                ) : (
+                  <div className="rounded-2xl overflow-hidden border border-slate-200 max-h-[500px] flex items-center justify-center bg-black/5 p-2">
+                    <img 
+                      src={viewingDoc.custom_image_url} 
+                      alt="Proof" 
+                      className="max-w-full max-h-[460px] object-contain rounded-lg shadow-sm" 
+                    />
+                  </div>
+                )
               ) : viewingDoc.category === 'Identity' && viewingDoc.title.includes('Aadhaar') ? (
                 /* Aadhaar Card Proof Visual */
                 <div className="bg-white rounded-2xl p-4 border border-orange-200 shadow-sm space-y-3 relative">
