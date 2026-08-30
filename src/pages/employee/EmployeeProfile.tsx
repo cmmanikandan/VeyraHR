@@ -139,7 +139,7 @@ export const EmployeeProfile: React.FC = () => {
   const handleSignOutConfirm = async () => {
     setIsSignOutModalOpen(false);
     await logout();
-    navigate('/');
+    navigate('/', { replace: true });
   };
 
   const handleToggleGeofence = () => {

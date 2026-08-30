@@ -44,6 +44,8 @@ import { EmployeeProfile } from './pages/employee/EmployeeProfile';
 import { EmployeeDocuments } from './pages/employee/EmployeeDocuments';
 import { EmployeePayslips } from './pages/employee/EmployeePayslips';
 import { EmployeeHelpdesk } from './pages/employee/EmployeeHelpdesk';
+import { ProtectedRoute } from './components/auth/ProtectedRoute';
+
 // Kiosk Page
 import { KioskPage } from './pages/kiosk/KioskPage';
 
@@ -53,32 +55,46 @@ const TitleUpdater: React.FC = () => {
 
   useEffect(() => {
     const routeTitles: Record<string, string> = {
-      '/': 'VeyraHR | People. Presence. Performance.',
-      '/admin/dashboard': 'VeyraHR | Admin Overview',
-      '/admin/hr-managers': 'VeyraHR | HR Managers Management',
-      '/admin/organization': 'VeyraHR | Organization Setup',
-      '/admin/branches': 'VeyraHR | Branch Locations',
-      '/admin/security': 'VeyraHR | Security Governance',
-      '/admin/audit-logs': 'VeyraHR | Audit Trail',
-      '/admin/holidays': 'VeyraHR | Company Holidays',
-      '/admin/settings': 'VeyraHR | Company Settings',
-      '/hr/dashboard': 'VeyraHR | HR Operations Console',
-      '/hr/employees': 'VeyraHR | Employee Directory',
-      '/hr/attendance': 'VeyraHR | Live Attendance Stream',
-      '/hr/leave': 'VeyraHR | Leave Approvals',
-      '/hr/shifts': 'VeyraHR | Shift Rosters',
-      '/hr/mood': 'VeyraHR | Team Mood Analytics',
-      '/hr/announcements': 'VeyraHR | Company Announcements',
-      '/hr/reports': 'VeyraHR | Report Generator',
-      '/hr/profile': 'VeyraHR | My HR Profile',
-      '/employee/home': 'VeyraHR | Employee Self-Service',
-      '/employee/attendance': 'VeyraHR | Mobile Attendance QR',
-      '/employee/leave': 'VeyraHR | Time-off Applications',
-      '/employee/notifications': 'VeyraHR | Notifications',
-      '/employee/profile': 'VeyraHR | Digital ID Card',
+      '/': 'VeyraHR | Enterprise Workforce & Biometric-Free Attendance Management',
+      '/admin/dashboard': 'Admin Command Center | VeyraHR',
+      '/admin/notifications': 'System Governance Alerts | VeyraHR',
+      '/admin/hr-managers': 'HR Manager Operations | VeyraHR',
+      '/admin/employees': 'Staff Governance | VeyraHR',
+      '/admin/documents': 'Secure Document Repository | VeyraHR',
+      '/admin/payroll': 'Enterprise Compensation & Payroll Engine | VeyraHR',
+      '/admin/departments': 'Organizational Taxonomy & Roles | VeyraHR',
+      '/admin/organization': 'Corporate Entity Hierarchy | VeyraHR',
+      '/admin/branches': 'Branch Geofence Network | VeyraHR',
+      '/admin/security': 'System Security & MFA Guard | VeyraHR',
+      '/admin/audit-logs': 'Immutable Audit Records | VeyraHR',
+      '/admin/holidays': 'Holiday Master | VeyraHR',
+      '/admin/settings': 'Enterprise Configurations | VeyraHR',
+      '/hr/dashboard': 'HR Operations Console | VeyraHR',
+      '/hr/notifications': 'HR Action Alerts & Notifications | VeyraHR',
+      '/hr/employees': 'Staff Directory | VeyraHR',
+      '/hr/documents': 'Compliance Documents | VeyraHR',
+      '/hr/payroll': 'Payroll & Salary Ledger | VeyraHR',
+      '/hr/departments': 'Departments & Designations | VeyraHR',
+      '/hr/attendance': 'Live Attendance Roster | VeyraHR',
+      '/hr/leave': 'Leave & Time-Off Approvals | VeyraHR',
+      '/hr/shifts': 'Shift Roster & Swaps | VeyraHR',
+      '/hr/mood': 'Team Sentiment Pulse | VeyraHR',
+      '/hr/announcements': 'Broadcast Announcements | VeyraHR',
+      '/hr/reports': 'Custom Analytics & Reports | VeyraHR',
+      '/hr/kiosks': 'Branch Terminal Kiosks | VeyraHR',
+      '/hr/profile': 'HR Manager Profile | VeyraHR',
+      '/employee/home': 'Employee Mobile Portal | VeyraHR',
+      '/employee/attendance': 'Dynamic QR Attendance & Geo-Check | VeyraHR',
+      '/employee/leave': 'Leave Application & Time-Off | VeyraHR',
+      '/employee/notifications': 'Personal Notification Inbox | VeyraHR',
+      '/employee/profile': 'My Identity & Employment Details | VeyraHR',
+      '/employee/documents': 'Personal Documentation Vault | VeyraHR',
+      '/employee/payslips': 'Salary Slips & Tax Summaries | VeyraHR',
+      '/employee/helpdesk': 'AI Support Helpdesk | VeyraHR',
+      '/kiosk': 'Branch Attendance Kiosk Terminal | VeyraHR',
     };
 
-    document.title = routeTitles[location.pathname] || 'VeyraHR | Enterprise SaaS';
+    document.title = routeTitles[location.pathname] || 'VeyraHR | Enterprise Workforce Management';
   }, [location.pathname]);
 
   return null;
@@ -151,7 +167,14 @@ const AppRoutes: React.FC = () => {
         <Route path="/" element={<LandingPage />} />
 
         {/* ADMIN PORTAL ROUTES */}
-        <Route path="/admin" element={<AdminLayout />}>
+        <Route
+          path="/admin"
+          element={
+            <ProtectedRoute allowedRoles={['admin']}>
+              <AdminLayout />
+            </ProtectedRoute>
+          }
+        >
           <Route index element={<Navigate to="/admin/dashboard" replace />} />
           <Route path="dashboard" element={<AdminDashboard />} />
           <Route path="notifications" element={<AdminNotificationsPage />} />
@@ -169,7 +192,14 @@ const AppRoutes: React.FC = () => {
         </Route>
 
         {/* HR PORTAL ROUTES */}
-        <Route path="/hr" element={<HRDashboardLayout />}>
+        <Route
+          path="/hr"
+          element={
+            <ProtectedRoute allowedRoles={['hr_manager', 'admin']}>
+              <HRDashboardLayout />
+            </ProtectedRoute>
+          }
+        >
           <Route index element={<Navigate to="/hr/dashboard" replace />} />
           <Route path="dashboard" element={<HRDashboardWrapper />} />
           <Route path="notifications" element={<HRNotificationsPage />} />
@@ -191,65 +221,81 @@ const AppRoutes: React.FC = () => {
         <Route
           path="/employee/home"
           element={
-            <EmployeeLayout activeTab="home" onTabChange={(t) => navigate(`/employee/${t}`)}>
-              <EmployeeHomeWrapper />
-            </EmployeeLayout>
+            <ProtectedRoute allowedRoles={['employee', 'hr_manager', 'admin']}>
+              <EmployeeLayout activeTab="home" onTabChange={(t) => navigate(`/employee/${t}`)}>
+                <EmployeeHomeWrapper />
+              </EmployeeLayout>
+            </ProtectedRoute>
           }
         />
         <Route
           path="/employee/attendance"
           element={
-            <EmployeeLayout activeTab="attendance" onTabChange={(t) => navigate(`/employee/${t}`)}>
-              <EmployeeAttendance />
-            </EmployeeLayout>
+            <ProtectedRoute allowedRoles={['employee', 'hr_manager', 'admin']}>
+              <EmployeeLayout activeTab="attendance" onTabChange={(t) => navigate(`/employee/${t}`)}>
+                <EmployeeAttendance />
+              </EmployeeLayout>
+            </ProtectedRoute>
           }
         />
         <Route
           path="/employee/leave"
           element={
-            <EmployeeLayout activeTab="leave" onTabChange={(t) => navigate(`/employee/${t}`)}>
-              <EmployeeLeave />
-            </EmployeeLayout>
+            <ProtectedRoute allowedRoles={['employee', 'hr_manager', 'admin']}>
+              <EmployeeLayout activeTab="leave" onTabChange={(t) => navigate(`/employee/${t}`)}>
+                <EmployeeLeave />
+              </EmployeeLayout>
+            </ProtectedRoute>
           }
         />
         <Route
           path="/employee/notifications"
           element={
-            <EmployeeLayout activeTab="notifications" onTabChange={(t) => navigate(`/employee/${t}`)}>
-              <EmployeeNotifications />
-            </EmployeeLayout>
+            <ProtectedRoute allowedRoles={['employee', 'hr_manager', 'admin']}>
+              <EmployeeLayout activeTab="notifications" onTabChange={(t) => navigate(`/employee/${t}`)}>
+                <EmployeeNotifications />
+              </EmployeeLayout>
+            </ProtectedRoute>
           }
         />
         <Route
           path="/employee/profile"
           element={
-            <EmployeeLayout activeTab="profile" onTabChange={(t) => navigate(`/employee/${t}`)}>
-              <EmployeeProfile />
-            </EmployeeLayout>
+            <ProtectedRoute allowedRoles={['employee', 'hr_manager', 'admin']}>
+              <EmployeeLayout activeTab="profile" onTabChange={(t) => navigate(`/employee/${t}`)}>
+                <EmployeeProfile />
+              </EmployeeLayout>
+            </ProtectedRoute>
           }
         />
         <Route
           path="/employee/documents"
           element={
-            <EmployeeLayout activeTab="documents" onTabChange={(t) => navigate(`/employee/${t}`)}>
-              <EmployeeDocuments />
-            </EmployeeLayout>
+            <ProtectedRoute allowedRoles={['employee', 'hr_manager', 'admin']}>
+              <EmployeeLayout activeTab="documents" onTabChange={(t) => navigate(`/employee/${t}`)}>
+                <EmployeeDocuments />
+              </EmployeeLayout>
+            </ProtectedRoute>
           }
         />
         <Route
           path="/employee/payslips"
           element={
-            <EmployeeLayout activeTab="payslips" onTabChange={(t) => navigate(`/employee/${t}`)}>
-              <EmployeePayslips />
-            </EmployeeLayout>
+            <ProtectedRoute allowedRoles={['employee', 'hr_manager', 'admin']}>
+              <EmployeeLayout activeTab="payslips" onTabChange={(t) => navigate(`/employee/${t}`)}>
+                <EmployeePayslips />
+              </EmployeeLayout>
+            </ProtectedRoute>
           }
         />
         <Route
           path="/employee/helpdesk"
           element={
-            <EmployeeLayout activeTab="helpdesk" onTabChange={(t) => navigate(`/employee/${t}`)}>
-              <EmployeeHelpdesk />
-            </EmployeeLayout>
+            <ProtectedRoute allowedRoles={['employee', 'hr_manager', 'admin']}>
+              <EmployeeLayout activeTab="helpdesk" onTabChange={(t) => navigate(`/employee/${t}`)}>
+                <EmployeeHelpdesk />
+              </EmployeeLayout>
+            </ProtectedRoute>
           }
         />
 
