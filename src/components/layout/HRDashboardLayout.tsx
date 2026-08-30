@@ -3,13 +3,16 @@ import { Outlet, useNavigate, NavLink } from 'react-router-dom';
 import { HRSidebar } from './HRSidebar';
 import { Button } from '../ui/Button';
 import { useAuth } from '../../context/AuthContext';
-import { LogOut, Menu, MapPin } from 'lucide-react';
+import { useData } from '../../context/DataContext';
+import { LogOut, Menu, MapPin, Bell, Check, X, Calendar, Clock, Layers } from 'lucide-react';
 import { VeyraBrandHeader } from '../common/VeyraBrandHeader';
 
 export const HRDashboardLayout: React.FC = () => {
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [isNotifsOpen, setIsNotifsOpen] = useState(false);
   const { profile, logout } = useAuth();
+  const { notifications, markNotificationRead, markAllNotificationsRead } = useData();
   const navigate = useNavigate();
 
   const handleSignOut = async () => {
@@ -18,6 +21,7 @@ export const HRDashboardLayout: React.FC = () => {
   };
 
   const userInitial = (profile?.full_name?.charAt(0) || 'H').toUpperCase();
+  const unreadCount = notifications.filter((n) => !n.is_read).length;
 
   return (
     <div className="min-h-screen bg-[#FCFAF7] flex text-[#172033]">
@@ -64,8 +68,75 @@ export const HRDashboardLayout: React.FC = () => {
             </div>
           </div>
 
-          {/* Right section: User Quick Profile + Sign Out */}
-          <div className="flex items-center gap-2 sm:gap-3">
+          {/* Right section: Notification Bell + User Quick Profile + Sign Out */}
+          <div className="flex items-center gap-2 sm:gap-3 relative">
+            {/* Notification Bell */}
+            <div className="relative">
+              <button
+                type="button"
+                onClick={() => setIsNotifsOpen(!isNotifsOpen)}
+                className="w-9 h-9 rounded-xl bg-[#FAF8F5] hover:bg-[#F0EBE3] border border-[#E8E2D9] text-slate-700 hover:text-blue-700 flex items-center justify-center transition-all relative shadow-2xs"
+                title="Notifications"
+              >
+                <Bell className="w-4 h-4" />
+                {unreadCount > 0 && (
+                  <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 rounded-full bg-rose-500 text-white font-mono font-black text-[10px] flex items-center justify-center ring-2 ring-white animate-pulse">
+                    {unreadCount}
+                  </span>
+                )}
+              </button>
+
+              {/* Notification Popover Dropdown */}
+              {isNotifsOpen && (
+                <div className="absolute right-0 top-12 w-80 sm:w-96 rounded-2xl bg-white border border-slate-200 shadow-2xl z-50 p-3.5 space-y-3 animate-in fade-in slide-in-from-top-2 duration-150">
+                  <div className="flex items-center justify-between border-b border-slate-100 pb-2.5">
+                    <div className="flex items-center gap-2">
+                      <Bell className="w-4 h-4 text-blue-600" />
+                      <span className="text-xs font-extrabold text-slate-900">HR Operations Alerts</span>
+                    </div>
+                    {unreadCount > 0 && (
+                      <button
+                        onClick={() => markAllNotificationsRead()}
+                        className="text-[10px] font-bold text-blue-600 hover:underline flex items-center gap-1"
+                      >
+                        <Check className="w-3 h-3" /> Mark all read
+                      </button>
+                    )}
+                  </div>
+
+                  <div className="max-h-72 overflow-y-auto space-y-2 divide-y divide-slate-100">
+                    {notifications.length === 0 ? (
+                      <p className="text-xs text-slate-400 text-center py-6">No notifications yet.</p>
+                    ) : (
+                      notifications.slice(0, 10).map((n) => (
+                        <div
+                          key={n.id}
+                          onClick={() => {
+                            markNotificationRead(n.id);
+                            if (n.link_url) {
+                              setIsNotifsOpen(false);
+                              navigate(n.link_url);
+                            }
+                          }}
+                          className={`pt-2 p-2 rounded-xl text-xs cursor-pointer transition-colors ${
+                            !n.is_read ? 'bg-blue-50/50 hover:bg-blue-50' : 'hover:bg-slate-50 opacity-70'
+                          }`}
+                        >
+                          <div className="flex items-start justify-between gap-2">
+                            <span className="font-extrabold text-slate-900 text-xs block leading-tight">{n.title}</span>
+                            <span className="text-[9px] text-slate-400 font-mono shrink-0">
+                              {new Date(n.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                            </span>
+                          </div>
+                          <p className="text-[11px] text-slate-600 mt-1 line-clamp-2 leading-relaxed">{n.message}</p>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+
             <NavLink
               to="/hr/profile"
               className="flex items-center gap-2 p-1.5 sm:px-2.5 sm:py-1.5 rounded-xl bg-[#FAF8F5] border border-[#E8E2D9] hover:border-veyra-blue hover:bg-blue-50/50 transition-all shadow-2xs"

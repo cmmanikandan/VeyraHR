@@ -448,7 +448,7 @@ export const HRReports: React.FC = () => {
           <div>
             <span className="text-[10px] uppercase font-bold text-slate-400 block mb-1">Verified By</span>
             <p className="font-bold text-slate-900">Head of Human Resources</p>
-            <p className="text-[10px] text-slate-500">Biometric & GPS Timestamp Verified</p>
+            <p className="text-[10px] text-slate-500">Dynamic QR & GPS Timestamp Verified</p>
           </div>
 
           <div className="text-left sm:text-right">

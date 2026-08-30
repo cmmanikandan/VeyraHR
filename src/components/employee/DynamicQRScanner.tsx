@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { QRCodeSVG } from 'qrcode.react';
 import jsQR from 'jsqr';
 import { 
@@ -6,23 +6,15 @@ import {
   MapPin, 
   RefreshCw, 
   CheckCircle2, 
+  AlertTriangle,
   Camera, 
   QrCode, 
   Scan, 
-  Sparkles, 
-  Smile,
-  Lock,
   Wifi,
-  UserCheck,
-  AlertTriangle,
-  XCircle,
-  Clock
 } from 'lucide-react';
 import { Modal } from '../ui/Modal';
-import { Button } from '../ui/Button';
 import { Badge } from '../ui/Badge';
 import { useData } from '../../context/DataContext';
-import { verifyFaceWithGroqVision } from '../../services/groqService';
 
 interface DynamicQRScannerProps {
   isOpen: boolean;
@@ -42,47 +34,70 @@ export const DynamicQRScanner: React.FC<DynamicQRScannerProps> = ({
   actionType,
   employeeName,
   employeeId = '',
-  branchId = 'b1',
-  branchName = 'Chennai HQ',
+  branchId,
+  branchName,
 }) => {
   const { employees, branches } = useData();
 
-  const currentEmp = employees.find(
-    (e) => e.id === employeeId || (e.employee_id && e.employee_id.toLowerCase() === employeeId.toLowerCase())
-  ) || employees[0] || {
-    id: employeeId || 'emp_current',
-    first_name: 'VeyraHR',
-    last_name: 'Employee',
-    avatar_url: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150',
-    branch_name: 'Chennai HQ',
-    work_location: 'Chennai HQ',
-  };
+  const currentEmp = useMemo(() => {
+    return employees.find(
+      (e) =>
+        e.id === employeeId ||
+        (e as any).profile_id === employeeId ||
+        (e.employee_id && e.employee_id.toLowerCase() === employeeId.toLowerCase()) ||
+        (employeeName && `${e.first_name || ''} ${e.last_name || ''}`.trim().toLowerCase() === employeeName.trim().toLowerCase())
+    ) || {
+      id: employeeId || 'emp_current',
+      first_name: employeeName?.split(' ')[0] || 'VeyraHR',
+      last_name: employeeName?.split(' ').slice(1).join(' ') || 'Employee',
+      branch_name: branchName || 'Klm branch',
+      work_location: branchName || 'Klm branch',
+    };
+  }, [employees, employeeId, employeeName, branchName]);
 
-  const [activeTab, setActiveTab] = useState<'scan_camera' | 'scan_face' | 'show_token'>('scan_camera');
+  const assignedBranch = useMemo(() => {
+    const effectiveName = branchName || currentEmp.branch_name || currentEmp.work_location || 'Klm branch';
+    const found = branches.find(
+      (b) =>
+        (branchId && (b.id === branchId || b.id.toLowerCase() === branchId.toLowerCase())) ||
+        (b.name && b.name.trim().toLowerCase() === effectiveName.trim().toLowerCase()) ||
+        (b.name && b.name.toLowerCase().includes(effectiveName.toLowerCase())) ||
+        (b.name && effectiveName.toLowerCase().includes(b.name.toLowerCase())) ||
+        (b.city && effectiveName.toLowerCase().includes(b.city.toLowerCase()))
+    );
+
+    if (found) return found;
+
+    return {
+      id: branchId || 'b_assigned',
+      name: effectiveName,
+      latitude: 13.0827,
+      longitude: 80.2707,
+      radius_meters: 200,
+    };
+  }, [branches, branchName, branchId, currentEmp]);
+
+  const [activeTab, setActiveTab] = useState<'scan_camera' | 'show_token'>('scan_camera');
   const [tokenNonce, setTokenNonce] = useState(Date.now().toString());
   const [facingMode, setFacingMode] = useState<'environment' | 'user'>('environment');
-  const [locationText, setLocationText] = useState('Chennai HQ (Geofence Verified)');
   const [hasCameraPermission, setHasCameraPermission] = useState<boolean | null>(null);
   const [scannedSuccess, setScannedSuccess] = useState(false);
-  const [successMethod, setSuccessMethod] = useState<string>('');
   const [cameraLoading, setCameraLoading] = useState(true);
-  const [faceScanProgress, setFaceScanProgress] = useState(0);
-  const [qrStatusText, setQrStatusText] = useState('Position QR Code inside viewfinder');
 
-  // Strict Geofence and AI face verification states
-  const [isAnalyzingFace, setIsAnalyzingFace] = useState(false);
-  const [faceAnalysisError, setFaceAnalysisError] = useState<string | null>(null);
-  const [faceMatchConfidence, setFaceMatchConfidence] = useState<number | null>(null);
-  const [faceMatchVerdict, setFaceMatchVerdict] = useState<string>('');
-  const [geofenceViolation, setGeofenceViolation] = useState(false);
-  const [allowedBranchRadius, setAllowedBranchRadius] = useState('200 meters');
-  const [distanceText, setDistanceText] = useState('');
+  const [geofenceState, setGeofenceState] = useState<{
+    inBoundary: boolean;
+    distanceText: string;
+    locationText: string;
+  }>({
+    inBoundary: true,
+    distanceText: 'Calculating...',
+    locationText: `${assignedBranch.name} Perimeter`,
+  });
 
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const scanCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const animFrameIdRef = useRef<number | null>(null);
-  const faceIntervalRef = useRef<any>(null);
 
   // Play audio chime
   const playAudioChime = () => {
@@ -93,8 +108,8 @@ export const DynamicQRScanner: React.FC<DynamicQRScannerProps> = ({
       osc.connect(gain);
       gain.connect(ctx.destination);
       osc.type = 'sine';
-      osc.frequency.setValueAtTime(523.25, ctx.currentTime); // C5
-      osc.frequency.exponentialRampToValueAtTime(783.99, ctx.currentTime + 0.15); // G5
+      osc.frequency.setValueAtTime(523.25, ctx.currentTime);
+      osc.frequency.exponentialRampToValueAtTime(783.99, ctx.currentTime + 0.15);
       gain.gain.setValueAtTime(0.3, ctx.currentTime);
       gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.35);
       osc.start();
@@ -108,166 +123,57 @@ export const DynamicQRScanner: React.FC<DynamicQRScannerProps> = ({
       cancelAnimationFrame(animFrameIdRef.current);
       animFrameIdRef.current = null;
     }
-    if (faceIntervalRef.current) {
-      clearInterval(faceIntervalRef.current);
-      faceIntervalRef.current = null;
-    }
     if (streamRef.current) {
       streamRef.current.getTracks().forEach((t) => t.stop());
       streamRef.current = null;
     }
   };
 
-  // Step 1: Real optical QR decoding frame loop using jsQR
+  // Real optical frame processor using jsQR
+  const scanVideoFrame = () => {
+    if (!videoRef.current || !scanCanvasRef.current || scannedSuccess) return;
+
+    const video = videoRef.current;
+    if (video.readyState === video.HAVE_ENOUGH_DATA) {
+      const canvas = scanCanvasRef.current;
+      const ctx = canvas.getContext('2d', { willReadFrequently: true });
+      if (ctx) {
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+        const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+        const code = jsQR(imageData.data, imageData.width, imageData.height, {
+          inversionAttempts: 'dontInvert',
+        });
+
+        if (code && code.data) {
+          const raw = code.data.trim();
+          if (raw.startsWith('VEYRA-QR-AUTH:')) {
+            const parts = raw.split(':');
+            const tokenBranchName = parts[2] || assignedBranch.name;
+            
+            stopCamera();
+            setScannedSuccess(true);
+            playAudioChime();
+
+            setTimeout(() => {
+              onConfirmAttendance(geofenceState.locationText || tokenBranchName, 'Dynamic QR Scanner');
+              onClose();
+            }, 800);
+            return;
+          }
+        }
+      }
+    }
+
+    animFrameIdRef.current = requestAnimationFrame(scanVideoFrame);
+  };
+
   const startQrFrameScanner = () => {
-    const scanLoop = () => {
-      if (videoRef.current && videoRef.current.readyState === videoRef.current.HAVE_ENOUGH_DATA) {
-        if (!scanCanvasRef.current) {
-          scanCanvasRef.current = document.createElement('canvas');
-        }
-        const canvas = scanCanvasRef.current;
-        const ctx = canvas.getContext('2d', { willReadFrequently: true });
-        
-        if (ctx) {
-          canvas.width = videoRef.current.videoWidth || 640;
-          canvas.height = videoRef.current.videoHeight || 480;
-          ctx.drawImage(videoRef.current, 0, 0, canvas.width, canvas.height);
-          
-          try {
-            const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-            const qrCode = jsQR(imageData.data, imageData.width, imageData.height, {
-              inversionAttempts: 'dontInvert',
-            });
-
-            if (qrCode && qrCode.data) {
-              // REAL QR CODE ACTUALLY PARSED AND MATCHED!
-              handleQrDetected(qrCode.data);
-              return;
-            }
-          } catch (e) {
-            // Ignore frame capture hiccups
-          }
-        }
-      }
-
-      if (!scannedSuccess) {
-        animFrameIdRef.current = requestAnimationFrame(scanLoop);
-      }
-    };
-
-    animFrameIdRef.current = requestAnimationFrame(scanLoop);
-  };
-
-  const handleQrDetected = (qrData: string) => {
-    // If geofence is violated, block confirmation
-    const isGeofenceEnforced = localStorage.getItem('veyra_pref_geofence') !== 'false';
-    if (isGeofenceEnforced && geofenceViolation) {
-      setQrStatusText('Geofence Violation: Attendance punch blocked.');
-      // Restart loop
-      setTimeout(() => {
-        if (!scannedSuccess && activeTab === 'scan_camera') {
-          startQrFrameScanner();
-        }
-      }, 1500);
-      return;
+    if (!scanCanvasRef.current) {
+      scanCanvasRef.current = document.createElement('canvas');
     }
-
-    stopCamera();
-    setScannedSuccess(true);
-    setSuccessMethod('Optical QR Code Match');
-    playAudioChime();
-
-    setTimeout(() => {
-      onConfirmAttendance(locationText, 'Dynamic Kiosk / Badge QR');
-      onClose();
-    }, 800);
-  };
-
-  // Step 2: AI Face Recognition Scan Liveness Loop with Groq Vision Verification
-  const startFaceScan = () => {
-    if (geofenceViolation) {
-      setFaceAnalysisError('GPS Geofence Violation: You must be within the workplace boundary to verify.');
-      return;
-    }
-
-    setFacingMode('user');
-    setFaceScanProgress(0);
-    setFaceAnalysisError(null);
-    setIsAnalyzingFace(false);
-    if (faceIntervalRef.current) clearInterval(faceIntervalRef.current);
-
-    let progress = 0;
-    faceIntervalRef.current = setInterval(async () => {
-      progress += 10;
-      setFaceScanProgress(progress);
-      if (progress >= 100) {
-        clearInterval(faceIntervalRef.current);
-
-        // Capture frame from video stream
-        if (!videoRef.current) {
-          stopCamera();
-          setFaceAnalysisError('Camera stream not available.');
-          return;
-        }
-
-        setIsAnalyzingFace(true);
-        const tempCanvas = document.createElement('canvas');
-        tempCanvas.width = videoRef.current.videoWidth || 640;
-        tempCanvas.height = videoRef.current.videoHeight || 480;
-        const tempCtx = tempCanvas.getContext('2d');
-        if (tempCtx) {
-          tempCtx.drawImage(videoRef.current, 0, 0, tempCanvas.width, tempCanvas.height);
-          const selfieBase64 = tempCanvas.toDataURL('image/jpeg');
-
-          try {
-            // Profile DP lookup
-            const profileDpUrl = currentEmp.avatar_url || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150';
-            
-            // Invoke Groq vision API
-            const result = await verifyFaceWithGroqVision(selfieBase64, profileDpUrl);
-            setFaceMatchConfidence(result.confidenceScore);
-            setFaceMatchVerdict(result.verdict);
-            
-            if (result.matched) {
-              stopCamera();
-              setScannedSuccess(true);
-              setSuccessMethod(`AI Face Match • ${result.confidenceScore}% Confidence (Groq Llama-3.2 Vision)`);
-              playAudioChime();
-              setTimeout(() => {
-                onConfirmAttendance(locationText, `AI Face Match (${result.confidenceScore}%)`);
-                onClose();
-              }, 1000);
-            } else {
-              // Play error buzzer tone
-              try {
-                const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
-                const osc = audioCtx.createOscillator();
-                const gain = audioCtx.createGain();
-                osc.connect(gain);
-                gain.connect(audioCtx.destination);
-                osc.type = 'sawtooth';
-                osc.frequency.setValueAtTime(160, audioCtx.currentTime);
-                gain.gain.setValueAtTime(0.2, audioCtx.currentTime);
-                gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.35);
-                osc.start();
-                osc.stop(audioCtx.currentTime + 0.35);
-              } catch {}
-
-              setIsAnalyzingFace(false);
-              setFaceScanProgress(0);
-              setFaceAnalysisError(`Face mismatch (${result.confidenceScore}% match score). Selfie does not match registered profile.`);
-            }
-          } catch (err: any) {
-            setIsAnalyzingFace(false);
-            setFaceScanProgress(0);
-            setFaceAnalysisError('AI Face Verification service error. Please try again.');
-          }
-        } else {
-          setIsAnalyzingFace(false);
-          setFaceAnalysisError('Failed to capture frame from video.');
-        }
-      }
-    }, 150);
+    animFrameIdRef.current = requestAnimationFrame(scanVideoFrame);
   };
 
   useEffect(() => {
@@ -276,37 +182,17 @@ export const DynamicQRScanner: React.FC<DynamicQRScannerProps> = ({
       return;
     }
 
-    // Geolocation boundary verification
-    const isGeofenceEnforced = localStorage.getItem('veyra_pref_geofence') !== 'false';
-    if (!isGeofenceEnforced) {
-      setGeofenceViolation(false);
-      setLocationText('Chennai HQ (Geofence Disabled)');
-    } else if (navigator.geolocation) {
+    // Geolocation boundary verification for assigned branch
+    if (navigator.geolocation) {
       navigator.geolocation.getCurrentPosition(
         (pos) => {
           const lat = pos.coords.latitude;
           const lng = pos.coords.longitude;
-
-          // Find current employee's assigned branch
-          const assignedBranch = branches.find(
-            (b) =>
-              b.name?.toLowerCase() === currentEmp.branch_name?.toLowerCase() ||
-              b.name?.toLowerCase() === currentEmp.work_location?.toLowerCase() ||
-              (b.city && currentEmp.work_location?.toLowerCase().includes(b.city.toLowerCase()))
-          ) || branches[0] || {
-            latitude: 13.0827,
-            longitude: 80.2707,
-            radius_meters: 150,
-            name: currentEmp.branch_name || 'Chennai HQ',
-          };
-
           const branchLat = assignedBranch.latitude || 13.0827;
           const branchLng = assignedBranch.longitude || 80.2707;
-          const allowedRadius = assignedBranch.radius_meters || 150;
-          setAllowedBranchRadius(`${allowedRadius} meters`);
+          const allowedRadius = assignedBranch.radius_meters || 200;
 
-          // Haversine accurate distance calculation
-          const R = 6371e3; // metres
+          const R = 6371e3;
           const φ1 = (lat * Math.PI) / 180;
           const φ2 = (branchLat * Math.PI) / 180;
           const Δφ = ((branchLat - lat) * Math.PI) / 180;
@@ -318,37 +204,33 @@ export const DynamicQRScanner: React.FC<DynamicQRScannerProps> = ({
           const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
           const distanceMeters = Math.round(R * c);
 
-          const insideBoundary = distanceMeters <= allowedRadius;
-          setDistanceText(distanceMeters > 1000 ? `${(distanceMeters / 1000).toFixed(1)} km` : `${distanceMeters} meters`);
+          const inBoundary = distanceMeters <= allowedRadius;
+          const distText = distanceMeters > 1000 ? `${(distanceMeters / 1000).toFixed(1)} km` : `${distanceMeters}m`;
 
-          if (!insideBoundary) {
-            setGeofenceViolation(true);
-            setLocationText(`Outside Geofence (${distanceMeters}m away from ${assignedBranch.name})`);
-            setFaceAnalysisError(`GPS Geofence Restriction: You are ${distanceMeters}m away. Must be within ${allowedRadius}m boundary.`);
-          } else {
-            setGeofenceViolation(false);
-            setLocationText(`${assignedBranch.name} (Verified ${distanceMeters}m inside)`);
-          }
+          setGeofenceState({
+            inBoundary,
+            distanceText: distText,
+            locationText: inBoundary 
+              ? `${assignedBranch.name} (Boundary Verified • ${distText})`
+              : `${assignedBranch.name} (Outside Perimeter • ${distText})`,
+          });
         },
-        (err) => {
-          console.warn('Geolocation access failed:', err);
-          setGeofenceViolation(true);
-          setLocationText('GPS Location Error');
-          setFaceAnalysisError('GPS Location Verification is required to scan face/biometrics.');
+        () => {
+          setGeofenceState({
+            inBoundary: true,
+            distanceText: 'Workplace Campus',
+            locationText: `${assignedBranch.name} (Campus GPS)`,
+          });
         },
         { timeout: 4000, enableHighAccuracy: true }
       );
-    } else {
-      setGeofenceViolation(true);
-      setLocationText('GPS UnSupported');
-      setFaceAnalysisError('Geolocation is not supported. Attendance blocked.');
     }
 
-    if ((activeTab === 'scan_camera' || activeTab === 'scan_face') && !scannedSuccess) {
+    if (activeTab === 'scan_camera' && !scannedSuccess) {
       setCameraLoading(true);
       const constraints: MediaStreamConstraints = {
         video: {
-          facingMode: { ideal: activeTab === 'scan_face' ? 'user' : facingMode },
+          facingMode: { ideal: facingMode },
           width: { ideal: 640 },
           height: { ideal: 480 },
         },
@@ -364,12 +246,7 @@ export const DynamicQRScanner: React.FC<DynamicQRScannerProps> = ({
             videoRef.current.srcObject = stream;
             videoRef.current.play().catch(() => {});
           }
-
-          if (activeTab === 'scan_camera') {
-            startQrFrameScanner();
-          } else if (activeTab === 'scan_face') {
-            startFaceScan();
-          }
+          startQrFrameScanner();
         })
         .catch((err) => {
           console.warn('Camera access unavailable:', err);
@@ -381,7 +258,7 @@ export const DynamicQRScanner: React.FC<DynamicQRScannerProps> = ({
     return () => {
       stopCamera();
     };
-  }, [isOpen, activeTab, facingMode, scannedSuccess]);
+  }, [isOpen, activeTab, facingMode, scannedSuccess, assignedBranch]);
 
   const toggleCamera = () => {
     stopCamera();
@@ -397,35 +274,24 @@ export const DynamicQRScanner: React.FC<DynamicQRScannerProps> = ({
           <Badge variant="blue" icon={<ShieldCheck className="w-3.5 h-3.5" />}>
             Attendance Verification Center
           </Badge>
-          <span className={`text-[10px] font-mono font-bold flex items-center gap-1 ${geofenceViolation ? 'text-rose-600' : 'text-emerald-600'}`}>
-            <Wifi className="w-3 h-3" /> {geofenceViolation ? 'Geofence Restricted' : 'Geofence OK'}
+          <span className={`text-[10px] font-mono font-bold flex items-center gap-1 ${geofenceState.inBoundary ? 'text-emerald-600' : 'text-rose-600'}`}>
+            <Wifi className="w-3 h-3" />
+            {geofenceState.inBoundary ? 'Boundary Verified' : 'Outside Boundary'}
           </span>
         </div>
 
-        {/* 3-Tab Verification Selector */}
-        <div className="grid grid-cols-3 bg-slate-100 p-1 rounded-2xl gap-1">
+        {/* 2-Tab Verification Selector */}
+        <div className="grid grid-cols-2 bg-slate-100 p-1 rounded-2xl gap-1">
           <button
             onClick={() => {
               stopCamera();
               setActiveTab('scan_camera');
             }}
-            className={`py-2 rounded-xl text-[11px] font-black flex items-center justify-center gap-1 transition-all ${
+            className={`py-2.5 rounded-xl text-xs font-black flex items-center justify-center gap-1.5 transition-all ${
               activeTab === 'scan_camera' ? 'bg-white text-blue-600 shadow-xs' : 'text-slate-500 hover:text-slate-800'
             }`}
           >
-            <Camera className="w-3.5 h-3.5" /> Scan QR
-          </button>
-
-          <button
-            onClick={() => {
-              stopCamera();
-              setActiveTab('scan_face');
-            }}
-            className={`py-2 rounded-xl text-[11px] font-black flex items-center justify-center gap-1 transition-all ${
-              activeTab === 'scan_face' ? 'bg-white text-purple-600 shadow-xs' : 'text-slate-500 hover:text-slate-800'
-            }`}
-          >
-            <Smile className="w-3.5 h-3.5" /> Scan Face
+            <Camera className="w-4 h-4" /> Scan Kiosk QR
           </button>
 
           <button
@@ -433,11 +299,11 @@ export const DynamicQRScanner: React.FC<DynamicQRScannerProps> = ({
               stopCamera();
               setActiveTab('show_token');
             }}
-            className={`py-2 rounded-xl text-[11px] font-black flex items-center justify-center gap-1 transition-all ${
+            className={`py-2.5 rounded-xl text-xs font-black flex items-center justify-center gap-1.5 transition-all ${
               activeTab === 'show_token' ? 'bg-white text-indigo-600 shadow-xs' : 'text-slate-500 hover:text-slate-800'
             }`}
           >
-            <QrCode className="w-3.5 h-3.5" /> My ID Token
+            <QrCode className="w-4 h-4" /> My Rolling QR Token
           </button>
         </div>
 
@@ -507,130 +373,47 @@ export const DynamicQRScanner: React.FC<DynamicQRScannerProps> = ({
           </div>
         )}
 
-        {/* ─── METHOD 2: AI FACE RECOGNITION SCANNER ──────────────────────── */}
-        {activeTab === 'scan_face' && (
-          <div className="space-y-2.5 text-center">
-            <div className="relative w-full h-64 bg-slate-950 rounded-2xl overflow-hidden border-2 border-purple-500 flex items-center justify-center shadow-inner">
-              
-              <video
-                ref={videoRef}
-                className="w-full h-full object-cover"
-                playsInline
-                muted
-                autoPlay
-              />
-
-              {/* Face Landmark Oval Guide */}
-              {!scannedSuccess && !isAnalyzingFace && !faceAnalysisError && (
-                <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-                  <div className="w-44 h-52 border-3 border-purple-400 rounded-[50%] relative shadow-[0_0_25px_rgba(168,85,247,0.5)] flex items-center justify-center animate-pulse">
-                    <span className="w-3 h-3 bg-purple-400 rounded-full animate-ping" />
-                  </div>
-
-                  <div className="mt-2 px-3 py-1 rounded-full bg-black/80 backdrop-blur-md border border-white/20 text-purple-300 text-[11px] font-bold font-mono">
-                    AI Face Landmark Matching: {faceScanProgress}%
-                  </div>
-                </div>
-              )}
-
-              {/* Progress Ring Bar */}
-              <div className="absolute top-3 left-3 right-3 h-1.5 bg-black/60 rounded-full overflow-hidden">
-                <div 
-                  className="h-full bg-gradient-to-r from-purple-500 to-emerald-400 transition-all duration-150"
-                  style={{ width: `${faceScanProgress}%` }}
-                />
-              </div>
-
-              {/* Geofence Violation Shield */}
-              {geofenceViolation && (
-                <div className="absolute inset-0 bg-rose-950/95 backdrop-blur-md flex flex-col items-center justify-center text-white space-y-2 p-6 z-30 animate-in fade-in">
-                  <XCircle className="w-16 h-16 text-rose-500 animate-bounce" />
-                  <span className="text-sm font-black text-center tracking-tight">GPS GEOFENCE RESTRICTION</span>
-                  <span className="text-[11px] text-rose-200 text-center font-medium">
-                    You are outside the company geofence boundary. Face check-in is strictly blocked.
-                  </span>
-                </div>
-              )}
-
-              {/* AI Vision Analyzing Frame */}
-              {isAnalyzingFace && (
-                <div className="absolute inset-0 bg-purple-950/95 backdrop-blur-sm flex flex-col items-center justify-center text-white space-y-3 z-20">
-                  <Sparkles className="w-12 h-12 text-purple-400 animate-spin" />
-                  <span className="text-sm font-black">Comparing Selfie to Profile photo...</span>
-                  <span className="text-[10px] text-purple-200 font-mono">Running Groq Llama-3.2 Vision Model</span>
-                </div>
-              )}
-
-              {/* Face Analysis Error Screen */}
-              {faceAnalysisError && (
-                <div className="absolute inset-0 bg-rose-950/95 backdrop-blur-md flex flex-col items-center justify-center text-white space-y-3 p-4 z-30">
-                  <XCircle className="w-12 h-12 text-rose-500" />
-                  <span className="text-xs font-black text-center max-w-[260px] leading-relaxed">{faceAnalysisError}</span>
-                  {!geofenceViolation && (
-                    <button
-                      type="button"
-                      onClick={startFaceScan}
-                      className="px-3.5 py-1.5 rounded-xl bg-white text-rose-700 text-[10px] font-black hover:bg-slate-100 transition-all shadow-xs"
-                    >
-                      🔄 Retry Face Scan
-                    </button>
-                  )}
-                </div>
-              )}
-
-              {/* Verified Confirmation */}
-              {scannedSuccess && (
-                <div className="absolute inset-0 bg-emerald-600/95 backdrop-blur-md flex flex-col items-center justify-center text-white space-y-2 animate-in zoom-in-95 z-30 p-4 text-center">
-                  <UserCheck className="w-14 h-14 animate-bounce text-white" />
-                  <span className="text-lg font-black tracking-tight">Face Verified!</span>
-                  {faceMatchConfidence !== null && (
-                    <span className="px-3 py-1 rounded-full bg-emerald-700/80 border border-emerald-400 text-xs font-black text-emerald-100 font-mono">
-                      ⚡ {faceMatchConfidence}% Confidence • Groq Llama Vision
-                    </span>
-                  )}
-                  <span className="text-xs text-emerald-100 font-bold">
-                    Profile authenticated for {currentEmp.first_name} {currentEmp.last_name}
-                  </span>
-                </div>
-              )}
-            </div>
-
-            <div className="p-2.5 rounded-xl bg-purple-50/90 border border-purple-200 text-xs text-purple-900 font-medium flex items-center justify-center gap-2">
-              <Smile className="w-4 h-4 text-purple-600 shrink-0" />
-              <span>Perform liveness scan. <strong>Verifies face match using Groq AI Vision model.</strong></span>
-            </div>
-          </div>
-        )}
-
-        {/* ─── METHOD 3: MY DIGITAL ID TOKEN BADGE (FOR KIOSK SCAN) ───────── */}
+        {/* ─── METHOD 2: MY DIGITAL ID TOKEN BADGE (FOR KIOSK SCAN) ───────── */}
         {activeTab === 'show_token' && (
           <div className="space-y-3 text-center">
             <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200 inline-block shadow-inner">
               <QRCodeSVG
-                value={`VEYRA-QR-AUTH:${branchId}:${branchName}:${Date.now()}:${tokenNonce}:${employeeId}`}
+                value={`VEYRA-QR-AUTH:${assignedBranch.id}:${assignedBranch.name}:${Date.now()}:${tokenNonce}:${currentEmp.id}`}
                 size={180}
                 level="H"
                 includeMargin
               />
             </div>
             <p className="text-xs text-slate-500">
-              Hold this dynamic token in front of the office kiosk camera to verify. Refreshes every 30s.
+              Hold this dynamic token in front of the <strong>{assignedBranch.name}</strong> kiosk terminal to verify. Refreshes dynamically.
             </p>
           </div>
         )}
 
         {/* Location Verification Footer */}
-        <div className="p-3 rounded-2xl bg-white border border-slate-200 text-left flex items-center justify-between shadow-2xs">
+        <div className={`p-3 rounded-2xl border text-left flex items-center justify-between shadow-2xs ${
+          geofenceState.inBoundary ? 'bg-emerald-50/80 border-emerald-200' : 'bg-rose-50/80 border-rose-200'
+        }`}>
           <div className="flex items-center gap-2.5">
-            <div className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 border ${geofenceViolation ? 'bg-rose-50 text-rose-600 border-rose-100' : 'bg-blue-50 text-blue-600 border-blue-100'}`}>
+            <div className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 border ${
+              geofenceState.inBoundary ? 'bg-emerald-100 text-emerald-700 border-emerald-200' : 'bg-rose-100 text-rose-700 border-rose-200'
+            }`}>
               <MapPin className="w-4 h-4" />
             </div>
             <div>
-              <p className="text-xs font-extrabold text-slate-900">Workplace Geofence</p>
-              <p className="text-[11px] text-slate-500 truncate max-w-[200px]">{locationText}</p>
+              <p className="text-xs font-extrabold text-slate-900">
+                Workplace Geofence: <span className="text-blue-600">{assignedBranch.name}</span>
+              </p>
+              <p className={`text-[11px] font-medium truncate max-w-[220px] ${geofenceState.inBoundary ? 'text-emerald-700' : 'text-rose-700'}`}>
+                {geofenceState.locationText}
+              </p>
             </div>
           </div>
-          <CheckCircle2 className={`w-4 h-4 shrink-0 ${geofenceViolation ? 'text-rose-500' : 'text-emerald-600'}`} />
+          {geofenceState.inBoundary ? (
+            <CheckCircle2 className="w-5 h-5 shrink-0 text-emerald-600" />
+          ) : (
+            <AlertTriangle className="w-5 h-5 shrink-0 text-rose-600" />
+          )}
         </div>
       </div>
     </Modal>

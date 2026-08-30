@@ -33,8 +33,31 @@ export const requestNotificationPermission = async (): Promise<boolean> => {
 
 /**
  * Displays a rich browser notification using Service Worker or fallback Notification API
+ * and persists the notification into local app inbox
  */
 export const triggerAppNotification = async (payload: NotificationPayload): Promise<void> => {
+  // 1. Persist notification to app's in-app inbox storage
+  if (typeof window !== 'undefined') {
+    try {
+      const saved = localStorage.getItem('veyra_notifications');
+      const list = saved ? JSON.parse(saved) : [];
+      const newNotif = {
+        id: `notif_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+        recipient_profile_id: 'all',
+        title: payload.title,
+        message: payload.body,
+        type: 'System',
+        created_at: new Date().toISOString(),
+        is_read: false,
+        link_url: payload.url || '/employee/attendance',
+      };
+      const updated = [newNotif, ...list];
+      localStorage.setItem('veyra_notifications', JSON.stringify(updated.slice(0, 100)));
+      window.dispatchEvent(new CustomEvent('veyra_notifications_updated'));
+    } catch {}
+  }
+
+  // 2. Push Native OS / Mobile Web notification
   if (typeof window === 'undefined' || !('Notification' in window)) return;
 
   const isGranted = await requestNotificationPermission();
@@ -72,7 +95,7 @@ export const sendAttendanceReminderNotification = (type: 'check_in' | 'check_out
   if (type === 'check_in') {
     triggerAppNotification({
       title: '⏰ Morning Check-In Reminder',
-      body: 'Good morning! Please scan the QR code or use face verification to record your attendance.',
+      body: 'Good morning! Please scan the QR code or use 1-tap GPS check-in to record your attendance.',
       url: '/employee/attendance',
       tag: 'checkin-reminder',
     });
@@ -98,9 +121,33 @@ export const sendLeaveStatusNotification = (
   triggerAppNotification({
     title: isApproved ? '🎉 Leave Request Approved' : '⚠️ Leave Request Update',
     body: isApproved
-      ? `Your ${leaveType} has been approved by HR. Enjoy your time off!`
-      : `Your ${leaveType} request was reviewed and declined by HR.`,
-    url: '/employee/leaves',
-    tag: `leave-update-${Date.now()}`,
+      ? `Hello ${employeeName}, your ${leaveType} request has been approved by HR.`
+      : `Hello ${employeeName}, your ${leaveType} request was not approved. Please consult HR.`,
+    url: '/employee/leave',
+    tag: 'leave-status',
   });
+};
+
+/**
+ * Helper to dispatch Geofence Entry & Exit push notifications
+ */
+export const sendGeofenceBoundaryNotification = (
+  branchName: string,
+  event: 'entered' | 'exited'
+): void => {
+  if (event === 'entered') {
+    triggerAppNotification({
+      title: `📍 Entered Workplace Boundary: ${branchName}`,
+      body: `You are inside the ${branchName} boundary perimeter. Ready for 1-Tap Check-In!`,
+      url: '/employee/attendance',
+      tag: 'geofence-boundary-entered',
+    });
+  } else {
+    triggerAppNotification({
+      title: `📍 Exited Workplace Boundary: ${branchName}`,
+      body: `You stepped outside ${branchName} perimeter. Don't forget to check out if finished for today.`,
+      url: '/employee/attendance',
+      tag: 'geofence-boundary-exited',
+    });
+  }
 };

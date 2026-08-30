@@ -51,9 +51,6 @@ export const EmployeeProfile: React.FC = () => {
   const [isLanguageModalOpen, setIsLanguageModalOpen] = useState(false);
 
   // Preference States with localStorage persistence
-  const [biometricEnabled, setBiometricEnabled] = useState(() => {
-    return localStorage.getItem('veyra_pref_biometric') !== 'false';
-  });
   const [autoGeofence, setAutoGeofence] = useState(() => {
     return localStorage.getItem('veyra_pref_geofence') !== 'false';
   });
@@ -143,12 +140,6 @@ export const EmployeeProfile: React.FC = () => {
     setIsSignOutModalOpen(false);
     await logout();
     navigate('/');
-  };
-
-  const handleToggleBiometric = () => {
-    const next = !biometricEnabled;
-    setBiometricEnabled(next);
-    localStorage.setItem('veyra_pref_biometric', String(next));
   };
 
   const handleToggleGeofence = () => {
@@ -244,7 +235,7 @@ export const EmployeeProfile: React.FC = () => {
               <h4 className="text-xs font-extrabold text-slate-900">Enterprise Verified Identity</h4>
               <span className="text-[10px] font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full">100% Complete</span>
             </div>
-            <p className="text-[11px] text-slate-500 mt-0.5">Biometrics & compliance verification completed</p>
+            <p className="text-[11px] text-slate-500 mt-0.5">Identity & compliance verification completed</p>
           </div>
         </div>
         <div className="w-20 bg-slate-100 h-2 rounded-full overflow-hidden shrink-0 hidden sm:block">
@@ -306,17 +297,17 @@ export const EmployeeProfile: React.FC = () => {
         <h3 className="text-xs font-extrabold text-slate-900 uppercase tracking-wider">Preferences & Security</h3>
         <div className="bg-white rounded-3xl border border-slate-200 shadow-sm divide-y divide-slate-100 overflow-hidden text-xs">
           
-          {/* Biometric Security */}
+          {/* GPS Workplace Security */}
           <div 
             onClick={() => setIsSecurityModalOpen(true)}
             className="p-3.5 flex items-center justify-between hover:bg-slate-50 cursor-pointer transition-colors"
           >
             <span className="text-slate-700 flex items-center gap-2.5 font-bold">
-              <Lock className="w-4 h-4 text-blue-600" /> Biometric & Device Security
+              <Lock className="w-4 h-4 text-blue-600" /> GPS Geofence & Device Security
             </span>
             <div className="flex items-center gap-1.5 text-slate-400">
-              <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${biometricEnabled ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-slate-100 text-slate-500'}`}>
-                {biometricEnabled ? 'Active' : 'Disabled'}
+              <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${autoGeofence ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-slate-100 text-slate-500'}`}>
+                {autoGeofence ? 'Active' : 'Disabled'}
               </span>
               <ChevronRight className="w-4 h-4" />
             </div>
@@ -363,34 +354,20 @@ export const EmployeeProfile: React.FC = () => {
         </button>
       </div>
 
-      {/* ─── MODAL 1: BIOMETRIC & DEVICE SECURITY MODAL ───────────────── */}
+      {/* ─── MODAL 1: GPS & DEVICE SECURITY MODAL ─────────────────────── */}
       {isSecurityModalOpen && (
         <Modal
           isOpen={isSecurityModalOpen}
           onClose={() => setIsSecurityModalOpen(false)}
-          title="Biometric & Device Security"
+          title="GPS Geofence & Workplace Security"
           maxWidth="sm"
         >
           <div className="space-y-4 text-left p-1">
             <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200 space-y-3 text-xs">
               <div className="flex items-center justify-between">
                 <div>
-                  <h5 className="font-extrabold text-slate-900">Biometric Authentication</h5>
-                  <p className="text-[11px] text-slate-500">Require Touch ID / Face ID / WebAuthn on check-in</p>
-                </div>
-                <button
-                  type="button"
-                  onClick={handleToggleBiometric}
-                  className={`w-11 h-6 rounded-full transition-colors relative p-0.5 ${biometricEnabled ? 'bg-blue-600' : 'bg-slate-300'}`}
-                >
-                  <div className={`w-5 h-5 rounded-full bg-white transition-transform ${biometricEnabled ? 'translate-x-5' : 'translate-x-0'}`} />
-                </button>
-              </div>
-
-              <div className="flex items-center justify-between pt-2 border-t border-slate-200">
-                <div>
                   <h5 className="font-extrabold text-slate-900">GPS Geofence Auto-Verify</h5>
-                  <p className="text-[11px] text-slate-500">Strictly enforce 50m radius around Chennai HQ</p>
+                  <p className="text-[11px] text-slate-500">Enforce workplace perimeter verification around reporting branch</p>
                 </div>
                 <button
                   type="button"

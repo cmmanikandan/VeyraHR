@@ -62,13 +62,17 @@ interface DataContextType {
   submitCorrection: (correction: Omit<AttendanceCorrection, 'id' | 'status' | 'created_at'>) => Promise<void>;
   updateCorrectionStatus: (id: string, status: 'Approved' | 'Rejected', comments?: string) => Promise<void>;
   logMood: (employeeId: string, mood: MoodLog['mood'], note?: string) => Promise<void>;
+  updateAttendanceBreak: (employeeId: string, breakMins: number) => Promise<void>;
   requestShiftSwap: (swap: Omit<ShiftSwapRequest, 'id' | 'target_acceptance' | 'hr_approval' | 'created_at'>) => Promise<void>;
   approveShiftSwap: (swapId: string, type: 'colleague' | 'hr', decision: 'Approved' | 'Accepted' | 'Rejected' | 'Declined') => Promise<void>;
   addAnnouncement: (ann: Omit<Announcement, 'id' | 'created_at'>) => Promise<void>;
   markNotificationRead: (id: string) => Promise<void>;
   markAllNotificationsRead: () => Promise<void>;
+  sendNotification: (title: string, body: string, url?: string, category?: string) => void;
   createCompanyBranch: (branch: Omit<Branch, 'id'>) => Promise<void>;
   deleteCompanyBranch: (id: string) => Promise<void>;
+  createCompanyHoliday: (holiday: Omit<CompanyHoliday, 'id' | 'company_id'>) => Promise<void>;
+  deleteCompanyHoliday: (id: string) => Promise<void>;
   createDepartment: (dept: Omit<Department, 'id'>) => Promise<void>;
   updateDepartment: (id: string, updates: Partial<Department>) => Promise<void>;
   deleteDepartment: (id: string) => Promise<void>;
@@ -88,7 +92,38 @@ const DEFAULT_HR_MANAGERS: HRManager[] = [];
 const DEFAULT_ATTENDANCE: AttendanceRecord[] = [];
 const DEFAULT_LEAVE_REQUESTS: LeaveRequest[] = [];
 const DEFAULT_ANNOUNCEMENTS: Announcement[] = [];
-const DEFAULT_NOTIFICATIONS: NotificationItem[] = [];
+const DEFAULT_NOTIFICATIONS: NotificationItem[] = [
+  {
+    id: 'notif_welcome',
+    recipient_profile_id: 'all',
+    title: '👋 Welcome to VeyraHR Portal',
+    message: 'Your biometric-free, QR and GPS-verified workplace portal is active. Scan or tap to mark shifts.',
+    type: 'System',
+    created_at: new Date().toISOString(),
+    is_read: false,
+    link_url: '/employee/home',
+  },
+  {
+    id: 'notif_geofence',
+    recipient_profile_id: 'all',
+    title: '📍 Live GPS Geofence Workplace Monitoring',
+    message: 'Automatic boundary detection is active. You will receive entry & exit notifications around your branch perimeter.',
+    type: 'System',
+    created_at: new Date(Date.now() - 1800000).toISOString(),
+    is_read: false,
+    link_url: '/employee/attendance',
+  },
+  {
+    id: 'notif_holiday',
+    recipient_profile_id: 'all',
+    title: '🎉 Holiday & Operations Calendar',
+    message: 'Review upcoming company holidays and non-working weekends in the Leave & Calendar hub.',
+    type: 'Announcement',
+    created_at: new Date(Date.now() - 3600000).toISOString(),
+    is_read: true,
+    link_url: '/employee/leave',
+  },
+];
 
 export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   // Purge legacy demo data from localStorage on fresh boot
@@ -235,25 +270,77 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const saved = localStorage.getItem('veyra_announcements');
       if (saved) {
         const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed)) return parsed;
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
       }
-      return [];
-    } catch {
-      return [];
-    }
+    } catch {}
+    return [
+      {
+        id: 'ann_01',
+        company_id: 'comp_veyra_tn',
+        title: 'Q3 Corporate Town Hall & Innovation Showcase 2026',
+        content: 'Join the leadership team for our quarterly review, product roadmap unveiling, and employee excellence awards session.',
+        category: 'Corporate Notice',
+        priority: 'Important',
+        author_name: 'HR Operations',
+        is_published: true,
+        created_at: new Date().toISOString(),
+      },
+      {
+        id: 'ann_02',
+        company_id: 'comp_veyra_tn',
+        title: 'Updated Cashless Medical Insurance Cards Available',
+        content: 'All active employees can download their updated Star Health E-Insurance cards from the Document Vault. 24/7 cashless hospitalization is active across 6,500+ partner network hospitals.',
+        category: 'Benefits & Health',
+        priority: 'Important',
+        author_name: 'People & Culture',
+        is_published: true,
+        created_at: new Date().toISOString(),
+      },
+      {
+        id: 'ann_03',
+        company_id: 'comp_veyra_tn',
+        title: 'Workplace Attendance & Dynamic QR Kiosk Guidelines',
+        content: 'Please ensure daily check-ins are recorded via reception Kiosk QR optical scan or mobile GPS punch within your assigned branch perimeter.',
+        category: 'Policy Update',
+        priority: 'Normal',
+        author_name: 'Admin Team',
+        is_published: true,
+        created_at: new Date().toISOString(),
+      },
+    ];
   });
   const [notifications, setNotifications] = useState<NotificationItem[]>(() => {
     try {
       const saved = localStorage.getItem('veyra_notifications');
       if (saved) {
         const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && !parsed.some(n => n.recipient_profile_id === 'emp_001')) return parsed;
+        if (Array.isArray(parsed) && parsed.length > 0 && !parsed.some(n => n.recipient_profile_id === 'emp_001')) return parsed;
       }
-      return [];
+      return DEFAULT_NOTIFICATIONS;
     } catch {
-      return [];
+      return DEFAULT_NOTIFICATIONS;
     }
   });
+
+  // Realtime listener for in-app notifications
+  useEffect(() => {
+    const handleNotifUpdate = () => {
+      try {
+        const saved = localStorage.getItem('veyra_notifications');
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          if (Array.isArray(parsed)) setNotifications(parsed);
+        }
+      } catch {}
+    };
+
+    window.addEventListener('veyra_notifications_updated', handleNotifUpdate);
+    window.addEventListener('storage', handleNotifUpdate);
+    return () => {
+      window.removeEventListener('veyra_notifications_updated', handleNotifUpdate);
+      window.removeEventListener('storage', handleNotifUpdate);
+    };
+  }, []);
   const [auditLogs, setAuditLogs] = useState<AuditLog[]>([]);
   const [documents, setDocuments] = useState<EmployeeDocument[]>([]);
   const [companyHolidays, setCompanyHolidays] = useState<CompanyHoliday[]>([
@@ -1101,9 +1188,9 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     // 3. Dispatch multi-channel notification to Unified Inbox & Mobile
     sendBrowserNotification(
-      'Leave Application Submitted',
-      `Your request for ${newReq.leave_type_name} (${newReq.total_days}d) from ${newReq.start_date} to ${newReq.end_date} has been submitted for HR approval.`,
-      '/employee/leave',
+      `📋 New Leave Application: ${newReq.employee_name || 'Staff Member'}`,
+      `${newReq.employee_name || 'An employee'} applied for ${newReq.total_days}d of ${newReq.leave_type_name} (${newReq.start_date} to ${newReq.end_date}). Reason: ${newReq.reason || 'Personal'}`,
+      '/hr/leave',
       'Leave'
     );
 
@@ -1150,6 +1237,13 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       console.warn('Correction sync:', e);
     }
     setCorrections((prev) => [newCorr, ...prev]);
+
+    sendBrowserNotification(
+      '✏️ New Attendance Correction Submitted',
+      `Correction request submitted for date ${newCorr.attendance_date}. Reason: ${newCorr.reason || 'Punch adjustment'}`,
+      '/hr/attendance',
+      'Attendance'
+    );
   };
 
   const updateCorrectionStatus = async (id: string, status: 'Approved' | 'Rejected', comments?: string) => {
@@ -1207,6 +1301,26 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     });
   };
 
+  const updateAttendanceBreak = async (employeeId: string, breakMins: number) => {
+    const todayStr = new Date().toISOString().split('T')[0];
+    setAttendance((prev) => {
+      const updated = prev.map((a) => {
+        const isMatch =
+          a.date === todayStr &&
+          (a.employee_id === employeeId || a.employee_id?.toLowerCase() === employeeId.toLowerCase());
+        if (isMatch) {
+          return {
+            ...a,
+            break_duration_mins: (a.break_duration_mins || 0) + breakMins,
+          };
+        }
+        return a;
+      });
+      try { localStorage.setItem('veyra_attendance', JSON.stringify(updated)); } catch {}
+      return updated;
+    });
+  };
+
   const requestShiftSwap = async (swap: Omit<ShiftSwapRequest, 'id' | 'target_acceptance' | 'hr_approval' | 'created_at'>) => {
     const newSwap: ShiftSwapRequest = {
       ...swap,
@@ -1221,6 +1335,13 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       console.warn('Shift swap sync:', e);
     }
     setShiftSwaps((prev) => [newSwap, ...prev]);
+
+    sendBrowserNotification(
+      '🔄 New Shift Swap Request',
+      'A peer shift swap request has been submitted for peer and HR approval.',
+      '/hr/shifts',
+      'Shift'
+    );
   };
 
   const approveShiftSwap = async (swapId: string, type: 'colleague' | 'hr', decision: 'Approved' | 'Accepted' | 'Rejected' | 'Declined') => {
@@ -1316,6 +1437,44 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setBranches((prev) => {
       const updated = prev.filter((b) => b.id !== id);
       try { localStorage.setItem('veyra_branches_data', JSON.stringify(updated)); } catch {}
+      return updated;
+    });
+  };
+
+  const createCompanyHoliday = async (h: Omit<CompanyHoliday, 'id' | 'company_id'>): Promise<void> => {
+    const newHol: CompanyHoliday = {
+      ...h,
+      id: `hol_${Date.now()}`,
+      company_id: 'comp_veyra_tn',
+    };
+    try {
+      await supabase.from('company_holidays').insert(newHol);
+    } catch (e) {
+      console.warn('Holiday sync:', e);
+    }
+    setCompanyHolidays((prev) => {
+      const updated = [...prev, newHol].sort((a, b) => a.holiday_date.localeCompare(b.holiday_date));
+      try { localStorage.setItem('veyra_company_holidays', JSON.stringify(updated)); } catch {}
+      return updated;
+    });
+
+    sendBrowserNotification(
+      `🎉 New Company Holiday: ${newHol.name}`,
+      `Marked ${new Date(newHol.holiday_date).toLocaleDateString('en-IN', { month: 'short', day: 'numeric', year: 'numeric' })} as an official holiday.`,
+      '/employee/leave',
+      'Announcement'
+    );
+  };
+
+  const deleteCompanyHoliday = async (id: string): Promise<void> => {
+    try {
+      await supabase.from('company_holidays').delete().eq('id', id);
+    } catch (e) {
+      console.warn('Holiday delete sync:', e);
+    }
+    setCompanyHolidays((prev) => {
+      const updated = prev.filter((h) => h.id !== id);
+      try { localStorage.setItem('veyra_company_holidays', JSON.stringify(updated)); } catch {}
       return updated;
     });
   };
@@ -1477,13 +1636,17 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         submitCorrection,
         updateCorrectionStatus,
         logMood,
+        updateAttendanceBreak,
         requestShiftSwap,
         approveShiftSwap,
         addAnnouncement,
         markNotificationRead,
         markAllNotificationsRead,
+        sendNotification: sendBrowserNotification,
         createCompanyBranch,
         deleteCompanyBranch,
+        createCompanyHoliday,
+        deleteCompanyHoliday,
         createDepartment,
         updateDepartment,
         deleteDepartment,

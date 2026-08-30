@@ -63,7 +63,7 @@ const FAQS = [
     a: 'Up to 10 unused Annual Leaves can be carried forward to the next calendar year. Excess accrued leaves are automatically encashed during the December payroll cycle.',
   },
   {
-    q: 'How do I correct a missed punch or biometric verification error?',
+    q: 'How do I correct a missed punch or attendance error?',
     a: 'Go to Attendance → Detailed Logs, and raise an Attendance Correction request within 48 hours for HR manager approval.',
   },
 ];

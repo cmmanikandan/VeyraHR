@@ -222,7 +222,7 @@ export const HRLiveAttendance: React.FC = () => {
         </div>
       </Card>
 
-      {/* TODAY'S ATTENDANCE TABLE */}
+      {/* TODAY'S ATTENDANCE: MOBILE CARDS & DESKTOP TABLE */}
       {filteredAttendance.length === 0 && absentEmployees.length === 0 ? (
         <EmptyState
           icon={<Users className="w-8 h-8" />}
@@ -232,144 +232,285 @@ export const HRLiveAttendance: React.FC = () => {
       ) : (
         <>
           {filteredAttendance.length > 0 && (
-            <div className="bg-white rounded-2xl border border-veyra-border shadow-veyra overflow-hidden">
-              <table className="w-full text-left text-xs">
-                <thead className="bg-veyra-bg-secondary border-b border-veyra-border text-veyra-text-sub font-semibold uppercase tracking-wider">
-                  <tr>
-                    <th className="py-3.5 px-4">Employee</th>
-                    <th className="py-3.5 px-4">Check-In Time</th>
-                    <th className="py-3.5 px-4">Status</th>
-                    <th className="py-3.5 px-4">Method</th>
-                    <th className="py-3.5 px-4">Location</th>
-                    <th className="py-3.5 px-4">Duration</th>
-                    <th className="py-3.5 px-4">Actions</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-veyra-border/60 font-medium">
-                  {filteredAttendance.map((att) => (
-                    <tr key={att.id} className="hover:bg-veyra-bg-secondary/50 transition-colors">
-                      <td className="py-3.5 px-4">
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <h4 className="text-xs font-black text-slate-900 uppercase font-mono tracking-wider">
+                  Live Recorded Punches ({filteredAttendance.length})
+                </h4>
+              </div>
+
+              {/* Mobile View: Cards */}
+              <div className="block md:hidden space-y-3">
+                {filteredAttendance.map((att) => {
+                  const emp = employees.find((e) => e.id === att.employee_id || e.employee_id === att.employee_id);
+                  const isCheckedInActive = !!att.check_in_time && !att.check_out_time;
+                  const elapsedMins = isCheckedInActive && att.check_in_time
+                    ? Math.max(1, Math.floor((Date.now() - new Date(att.check_in_time).getTime()) / 60000))
+                    : 0;
+
+                  return (
+                    <div
+                      key={att.id}
+                      className="p-4 rounded-2xl bg-white border border-slate-200 shadow-2xs space-y-3"
+                    >
+                      <div className="flex items-center justify-between">
                         <div className="flex items-center gap-2.5">
-                          <Avatar 
-                            src={employees.find((e) => e.id === att.employee_id || e.employee_id === att.employee_id)?.avatar_url}
-                            name={att.employee_name || 'Staff'} 
-                            size="sm" 
+                          <Avatar
+                            src={emp?.avatar_url}
+                            name={att.employee_name || 'Staff'}
+                            size="sm"
                           />
-                          <span className="font-bold text-veyra-text">{att.employee_name}</span>
+                          <div>
+                            <span className="font-extrabold text-slate-900 block leading-tight text-xs">
+                              {att.employee_name}
+                            </span>
+                            <span className="text-[10px] text-slate-400 font-mono">
+                              {emp?.employee_id || att.employee_id}
+                            </span>
+                          </div>
                         </div>
-                      </td>
-                      <td className="py-3.5 px-4 font-mono text-veyra-text">
-                        {att.check_in_time
-                          ? new Date(att.check_in_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-                          : '--:--'}
-                      </td>
-                      <td className="py-3.5 px-4">
+
                         <Badge
                           variant={att.status === 'Present' ? 'green' : att.status === 'Late' ? 'amber' : att.status === 'Absent' ? 'red' : 'blue'}
                           size="sm"
                         >
                           {att.status}
                         </Badge>
-                      </td>
-                      <td className="py-3.5 px-4">
-                        <Badge variant="blue" size="sm" icon={<ShieldCheck className="w-3 h-3" />}>
-                          {att.verification_method}
-                        </Badge>
-                      </td>
-                      <td className="py-3.5 px-4 text-veyra-text-sub">
-                        <div className="flex items-center gap-1.5">
-                          <MapPin className="w-3.5 h-3.5 text-veyra-blue shrink-0" />
-                          <span className="truncate max-w-[140px]">{att.check_in_location || 'Office'}</span>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-2 text-center text-xs">
+                        <div className="p-2 bg-slate-50 rounded-xl border border-slate-100">
+                          <span className="text-[10px] text-slate-400 font-bold block uppercase">In-Time</span>
+                          <span className="font-extrabold text-slate-900 font-mono text-[11px] mt-0.5 block">
+                            {att.check_in_time
+                              ? new Date(att.check_in_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                              : '--:--'}
+                          </span>
                         </div>
-                      </td>
-                      <td className="py-3.5 px-4 font-bold text-emerald-700">
-                        {(() => {
-                          if (att.status === 'Absent') return <span className="text-red-500 font-bold">Absent</span>;
-                          if (att.check_in_time && !att.check_out_time) {
-                            const elapsedMins = Math.max(1, Math.floor((Date.now() - new Date(att.check_in_time).getTime()) / 60000));
-                            return `${Math.floor(elapsedMins / 60)}h ${elapsedMins % 60}m 🟢`;
-                          }
-                          if (att.working_hours_mins > 0) {
-                            return `${Math.floor(att.working_hours_mins / 60)}h ${att.working_hours_mins % 60}m`;
-                          }
-                          return '—';
-                        })()}
-                      </td>
-                      <td className="py-3.5 px-4">
-                        <div className="flex items-center gap-1.5">
-                          {att.check_in_time && !att.check_out_time && (
-                            <button
-                              onClick={() => handleForceCheckout(att.id, att.employee_id)}
-                              disabled={markingCheckout === att.id}
-                              className="px-2 py-1 text-[10px] font-bold rounded-lg bg-orange-50 border border-orange-200 text-orange-700 hover:bg-orange-100 transition-colors disabled:opacity-50"
-                            >
-                              {markingCheckout === att.id ? '...' : 'Force Out'}
-                            </button>
-                          )}
-                          {att.status !== 'Absent' && (
-                            <button
-                              onClick={() => handleMarkAbsent(att.employee_id, att.employee_name || '')}
-                              disabled={markingAbsent === att.employee_id}
-                              className="px-2 py-1 text-[10px] font-bold rounded-lg bg-red-50 border border-red-200 text-red-700 hover:bg-red-100 transition-colors disabled:opacity-50"
-                            >
-                              {markingAbsent === att.employee_id ? '...' : 'Mark Absent'}
-                            </button>
-                          )}
+
+                        <div className="p-2 bg-blue-50/70 rounded-xl border border-blue-100">
+                          <span className="text-[10px] text-blue-700 font-bold block uppercase">Duration</span>
+                          <span className="font-extrabold text-blue-900 font-mono text-[11px] mt-0.5 block">
+                            {att.status === 'Absent'
+                              ? 'Absent'
+                              : isCheckedInActive
+                              ? `${Math.floor(elapsedMins / 60)}h ${elapsedMins % 60}m 🟢`
+                              : att.working_hours_mins > 0
+                              ? `${Math.floor(att.working_hours_mins / 60)}h ${att.working_hours_mins % 60}m`
+                              : 'Active'}
+                          </span>
                         </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+                      </div>
+
+                      <div className="flex items-center justify-between text-[11px] text-slate-500 pt-1 border-t border-slate-100">
+                        <div className="flex items-center gap-1.5 truncate max-w-[170px]">
+                          <MapPin className="w-3.5 h-3.5 text-blue-600 shrink-0" />
+                          <span className="truncate">{att.check_in_location || 'Assigned Branch'}</span>
+                        </div>
+                        <span className="font-mono text-emerald-700 font-bold text-[10px] truncate">
+                          ✓ {att.verification_method || 'QR + GPS'}
+                        </span>
+                      </div>
+
+                      {/* Action buttons on mobile */}
+                      <div className="flex items-center gap-2 pt-1">
+                        {isCheckedInActive && (
+                          <button
+                            onClick={() => handleForceCheckout(att.id, att.employee_id)}
+                            disabled={markingCheckout === att.id}
+                            className="flex-1 py-2 px-3 text-xs font-extrabold rounded-xl bg-amber-50 border border-amber-200 text-amber-800 hover:bg-amber-100 transition-colors disabled:opacity-50 shadow-2xs"
+                          >
+                            {markingCheckout === att.id ? 'Checking Out...' : 'Force Check-Out'}
+                          </button>
+                        )}
+                        {att.status !== 'Absent' && (
+                          <button
+                            onClick={() => handleMarkAbsent(att.employee_id, att.employee_name || '')}
+                            disabled={markingAbsent === att.employee_id}
+                            className="flex-1 py-2 px-3 text-xs font-extrabold rounded-xl bg-rose-50 border border-rose-200 text-rose-700 hover:bg-rose-100 transition-colors disabled:opacity-50 shadow-2xs"
+                          >
+                            {markingAbsent === att.employee_id ? 'Marking...' : 'Mark Absent'}
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Desktop View: Full Responsive Table */}
+              <div className="hidden md:block bg-white rounded-2xl border border-veyra-border shadow-veyra overflow-hidden">
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-xs min-w-[700px]">
+                    <thead className="bg-veyra-bg-secondary border-b border-veyra-border text-veyra-text-sub font-semibold uppercase tracking-wider">
+                      <tr>
+                        <th className="py-3.5 px-4">Employee</th>
+                        <th className="py-3.5 px-4">Check-In Time</th>
+                        <th className="py-3.5 px-4">Status</th>
+                        <th className="py-3.5 px-4">Method</th>
+                        <th className="py-3.5 px-4">Location</th>
+                        <th className="py-3.5 px-4">Duration</th>
+                        <th className="py-3.5 px-4">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-veyra-border/60 font-medium">
+                      {filteredAttendance.map((att) => (
+                        <tr key={att.id} className="hover:bg-veyra-bg-secondary/50 transition-colors">
+                          <td className="py-3.5 px-4">
+                            <div className="flex items-center gap-2.5">
+                              <Avatar 
+                                src={employees.find((e) => e.id === att.employee_id || e.employee_id === att.employee_id)?.avatar_url}
+                                name={att.employee_name || 'Staff'} 
+                                size="sm" 
+                              />
+                              <span className="font-bold text-veyra-text">{att.employee_name}</span>
+                            </div>
+                          </td>
+                          <td className="py-3.5 px-4 font-mono text-veyra-text">
+                            {att.check_in_time
+                              ? new Date(att.check_in_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                              : '--:--'}
+                          </td>
+                          <td className="py-3.5 px-4">
+                            <Badge
+                              variant={att.status === 'Present' ? 'green' : att.status === 'Late' ? 'amber' : att.status === 'Absent' ? 'red' : 'blue'}
+                              size="sm"
+                            >
+                              {att.status}
+                            </Badge>
+                          </td>
+                          <td className="py-3.5 px-4">
+                            <Badge variant="blue" size="sm" icon={<ShieldCheck className="w-3 h-3" />}>
+                              {att.verification_method}
+                            </Badge>
+                          </td>
+                          <td className="py-3.5 px-4 text-veyra-text-sub">
+                            <div className="flex items-center gap-1.5">
+                              <MapPin className="w-3.5 h-3.5 text-veyra-blue shrink-0" />
+                              <span className="truncate max-w-[140px]">{att.check_in_location || 'Office'}</span>
+                            </div>
+                          </td>
+                          <td className="py-3.5 px-4 font-bold text-emerald-700">
+                            {(() => {
+                              if (att.status === 'Absent') return <span className="text-red-500 font-bold">Absent</span>;
+                              if (att.check_in_time && !att.check_out_time) {
+                                const elapsedMins = Math.max(1, Math.floor((Date.now() - new Date(att.check_in_time).getTime()) / 60000));
+                                return `${Math.floor(elapsedMins / 60)}h ${elapsedMins % 60}m 🟢`;
+                              }
+                              if (att.working_hours_mins > 0) {
+                                return `${Math.floor(att.working_hours_mins / 60)}h ${att.working_hours_mins % 60}m`;
+                              }
+                              return '—';
+                            })()}
+                          </td>
+                          <td className="py-3.5 px-4">
+                            <div className="flex items-center gap-1.5">
+                              {att.check_in_time && !att.check_out_time && (
+                                <button
+                                  onClick={() => handleForceCheckout(att.id, att.employee_id)}
+                                  disabled={markingCheckout === att.id}
+                                  className="px-2 py-1 text-[10px] font-bold rounded-lg bg-orange-50 border border-orange-200 text-orange-700 hover:bg-orange-100 transition-colors disabled:opacity-50"
+                                >
+                                  {markingCheckout === att.id ? '...' : 'Force Out'}
+                                </button>
+                              )}
+                              {att.status !== 'Absent' && (
+                                <button
+                                  onClick={() => handleMarkAbsent(att.employee_id, att.employee_name || '')}
+                                  disabled={markingAbsent === att.employee_id}
+                                  className="px-2 py-1 text-[10px] font-bold rounded-lg bg-red-50 border border-red-200 text-red-700 hover:bg-red-100 transition-colors disabled:opacity-50"
+                                >
+                                  {markingAbsent === att.employee_id ? '...' : 'Mark Absent'}
+                                </button>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
             </div>
           )}
 
           {/* EMPLOYEES NOT YET CHECKED IN TODAY */}
           {(statusFilter === 'ALL' || statusFilter === 'Absent') && absentEmployees.length > 0 && (
-            <div className="bg-white rounded-2xl border border-red-100 shadow-xs overflow-hidden">
-              <div className="px-4 py-3 bg-red-50 border-b border-red-100 flex items-center gap-2">
-                <UserX className="w-4 h-4 text-red-500" />
-                <span className="text-xs font-extrabold text-red-700 uppercase tracking-wider">
-                  Not Checked In Today ({absentEmployees.length})
-                </span>
+            <div className="space-y-3">
+              <div className="px-4 py-3 bg-red-50 border border-red-100 rounded-2xl flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <UserX className="w-4 h-4 text-red-500" />
+                  <span className="text-xs font-extrabold text-red-700 uppercase tracking-wider">
+                    Not Checked In Today ({absentEmployees.length})
+                  </span>
+                </div>
               </div>
-              <table className="w-full text-left text-xs">
-                <thead className="bg-red-50/50 border-b border-red-100 text-red-400 font-semibold uppercase tracking-wider">
-                  <tr>
-                    <th className="py-3 px-4">Employee</th>
-                    <th className="py-3 px-4">Department</th>
-                    <th className="py-3 px-4">Branch</th>
-                    <th className="py-3 px-4">Action</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-red-50 font-medium">
-                  {absentEmployees.map((emp) => (
-                    <tr key={emp.id} className="hover:bg-red-50/30 transition-colors">
-                      <td className="py-3 px-4">
-                        <div className="flex items-center gap-2.5">
-                          <Avatar name={`${emp.first_name} ${emp.last_name}`} size="sm" />
-                          <div>
-                            <p className="font-bold text-veyra-text">{emp.first_name} {emp.last_name}</p>
-                            <p className="text-[10px] text-veyra-text-sub">{emp.employee_id}</p>
-                          </div>
-                        </div>
-                      </td>
-                      <td className="py-3 px-4 text-veyra-text-sub">{emp.department_name || '—'}</td>
-                      <td className="py-3 px-4 text-veyra-text-sub">{emp.branch_name || '—'}</td>
-                      <td className="py-3 px-4">
-                        <button
-                          onClick={() => handleMarkAbsent(emp.id, `${emp.first_name} ${emp.last_name}`)}
-                          disabled={markingAbsent === emp.id}
-                          className="px-3 py-1.5 text-[10px] font-bold rounded-xl bg-red-50 border border-red-200 text-red-700 hover:bg-red-100 transition-colors disabled:opacity-50 flex items-center gap-1"
-                        >
-                          <XCircle className="w-3 h-3" />
-                          {markingAbsent === emp.id ? 'Marking...' : 'Mark Absent'}
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+
+              {/* Mobile View for Absent Employees */}
+              <div className="block md:hidden space-y-2.5">
+                {absentEmployees.map((emp) => (
+                  <div key={emp.id} className="p-3.5 rounded-2xl bg-white border border-red-100 shadow-2xs flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <Avatar name={`${emp.first_name} ${emp.last_name}`} size="sm" />
+                      <div className="truncate">
+                        <p className="font-bold text-slate-900 text-xs truncate">{emp.first_name} {emp.last_name}</p>
+                        <p className="text-[10px] text-slate-400 truncate">{emp.department_name || 'Staff'} • {emp.branch_name || 'Branch'}</p>
+                      </div>
+                    </div>
+
+                    <button
+                      onClick={() => handleMarkAbsent(emp.id, `${emp.first_name} ${emp.last_name}`)}
+                      disabled={markingAbsent === emp.id}
+                      className="px-2.5 py-1.5 text-[10px] font-bold rounded-xl bg-red-50 border border-red-200 text-red-700 hover:bg-red-100 transition-colors disabled:opacity-50 shrink-0"
+                    >
+                      {markingAbsent === emp.id ? '...' : 'Mark Absent'}
+                    </button>
+                  </div>
+                ))}
+              </div>
+
+              {/* Desktop View for Absent Employees */}
+              <div className="hidden md:block bg-white rounded-2xl border border-red-100 shadow-xs overflow-hidden">
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-xs min-w-[500px]">
+                    <thead className="bg-red-50/50 border-b border-red-100 text-red-400 font-semibold uppercase tracking-wider">
+                      <tr>
+                        <th className="py-3 px-4">Employee</th>
+                        <th className="py-3 px-4">Department</th>
+                        <th className="py-3 px-4">Branch</th>
+                        <th className="py-3 px-4">Action</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-red-50 font-medium">
+                      {absentEmployees.map((emp) => (
+                        <tr key={emp.id} className="hover:bg-red-50/30 transition-colors">
+                          <td className="py-3 px-4">
+                            <div className="flex items-center gap-2.5">
+                              <Avatar name={`${emp.first_name} ${emp.last_name}`} size="sm" />
+                              <div>
+                                <p className="font-bold text-veyra-text">{emp.first_name} {emp.last_name}</p>
+                                <p className="text-[10px] text-veyra-text-sub">{emp.employee_id}</p>
+                              </div>
+                            </div>
+                          </td>
+                          <td className="py-3 px-4 text-veyra-text-sub">{emp.department_name || '—'}</td>
+                          <td className="py-3 px-4 text-veyra-text-sub">{emp.branch_name || '—'}</td>
+                          <td className="py-3 px-4">
+                            <button
+                              onClick={() => handleMarkAbsent(emp.id, `${emp.first_name} ${emp.last_name}`)}
+                              disabled={markingAbsent === emp.id}
+                              className="px-3 py-1.5 text-[10px] font-bold rounded-xl bg-red-50 border border-red-200 text-red-700 hover:bg-red-100 transition-colors disabled:opacity-50 flex items-center gap-1"
+                            >
+                              <XCircle className="w-3 h-3" />
+                              {markingAbsent === emp.id ? 'Marking...' : 'Mark Absent'}
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
             </div>
           )}
         </>

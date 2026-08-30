@@ -72,6 +72,17 @@ export const HRKioskManagement: React.FC = () => {
   const [radiusMeters, setRadiusMeters] = useState(150);
   const [copiedId, setCopiedId] = useState<string | null>(null);
 
+  // HR Master GPS Policy
+  const [gpsPunchPolicyEnabled, setGpsPunchPolicyEnabled] = useState(() => {
+    return localStorage.getItem('veyra_company_gps_punch_enabled') !== 'false';
+  });
+
+  const handleToggleGpsPunchPolicy = () => {
+    const next = !gpsPunchPolicyEnabled;
+    setGpsPunchPolicyEnabled(next);
+    localStorage.setItem('veyra_company_gps_punch_enabled', String(next));
+  };
+
   const handleBranchChange = (bId: string) => {
     setSelectedBranchId(bId);
     const branch = branches.find((b) => b.id === bId);
@@ -172,6 +183,37 @@ export const HRKioskManagement: React.FC = () => {
             + Create Branch Kiosk Account
           </Button>
         </div>
+      </div>
+
+      {/* ─── 1.5 COMPANY ATTENDANCE SECURITY POLICY CARD ─────────────────── */}
+      <div className="bg-gradient-to-br from-slate-900 to-slate-800 text-white rounded-3xl p-5 border border-slate-700 shadow-md flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div className="flex items-center gap-3.5">
+          <div className="w-12 h-12 rounded-2xl bg-white/10 flex items-center justify-center text-white shrink-0 border border-white/15">
+            <Smartphone className="w-6 h-6 text-indigo-400" />
+          </div>
+          <div>
+            <div className="flex items-center gap-2">
+              <h4 className="text-sm font-extrabold text-white">Mobile 1-Tap GPS Geofenced Check-In Policy</h4>
+              <span className={`text-[10px] font-black uppercase px-2 py-0.5 rounded-full border ${gpsPunchPolicyEnabled ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40' : 'bg-rose-500/20 text-rose-300 border-rose-500/40'}`}>
+                {gpsPunchPolicyEnabled ? 'Enabled' : 'Disabled (Kiosk Only)'}
+              </span>
+            </div>
+            <p className="text-xs text-slate-300 mt-0.5 leading-relaxed max-w-xl">
+              {gpsPunchPolicyEnabled 
+                ? 'Employees can punch in directly from their personal mobile browsers within the authorized branch GPS perimeter.'
+                : 'Mobile GPS punches are locked. Employees MUST physically scan the Reception Kiosk QR terminal.'}
+            </p>
+          </div>
+        </div>
+
+        <button
+          type="button"
+          onClick={handleToggleGpsPunchPolicy}
+          className={`w-14 h-8 rounded-full transition-colors relative p-1 shrink-0 ${gpsPunchPolicyEnabled ? 'bg-blue-600' : 'bg-slate-600'}`}
+          title="Toggle GPS Punch Policy"
+        >
+          <div className={`w-6 h-6 rounded-full bg-white transition-transform shadow-md ${gpsPunchPolicyEnabled ? 'translate-x-6' : 'translate-x-0'}`} />
+        </button>
       </div>
 
       {/* ─── 2. QUICK STATS BANNER ─────────────────────────────────────── */}

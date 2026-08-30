@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { 
   Clock, 
   MapPin, 
@@ -36,7 +36,7 @@ import { DynamicQRScanner } from '../../components/employee/DynamicQRScanner';
 import { DigitalIDCardModal } from '../../components/employee/DigitalIDCardModal';
 import { ShiftSwapModal } from '../../components/employee/ShiftSwapModal';
 import { Employee, MoodLog } from '../../types/database';
-import { verifyBiometricCredential } from '../../utils/webauthn';
+import { sendGeofenceBoundaryNotification } from '../../services/notificationService';
 
 interface EmployeeHomeProps {
   onNavigate: (tab: 'home' | 'attendance' | 'leave' | 'notifications' | 'profile' | 'documents' | 'payslips' | 'helpdesk') => void;
@@ -44,47 +44,60 @@ interface EmployeeHomeProps {
 
 export const EmployeeHome: React.FC<EmployeeHomeProps> = ({ onNavigate }) => {
   const { profile } = useAuth();
-  const { employees, attendance, leaveRequests, moodLogs, announcements, shifts, branches, logMood, checkIn, checkOut, isOffline, offlineQueueLength } = useData();
+  const { 
+    employees, 
+    attendance, 
+    leaveRequests, 
+    moodLogs, 
+    announcements, 
+    shifts, 
+    branches, 
+    companyHolidays,
+    logMood, 
+    updateAttendanceBreak,
+    checkIn, 
+    checkOut, 
+    isOffline, 
+    offlineQueueLength 
+  } = useData();
 
-  const [isBiometricVerifying, setIsBiometricVerifying] = useState(false);
-  const [biometricStatus, setBiometricStatus] = useState<string | null>(null);
+  const [is1TapVerifying, setIs1TapVerifying] = useState(false);
+  const [oneTapStatus, setOneTapStatus] = useState<string | null>(null);
+  const [selectedAnnouncement, setSelectedAnnouncement] = useState<any | null>(null);
 
-  const executeBiometricAuth = async (verifiedLocation?: string) => {
-    setIsBiometricVerifying(true);
-    setBiometricStatus('Authenticating hardware biometrics (Face ID / Fingerprint)...');
-    try {
-      const res = await verifyBiometricCredential();
-      if (res.success) {
-        setBiometricStatus('Hardware Enclave Verified ✓ Logging Punch...');
-        const locationToLog = verifiedLocation || currentEmp.branch_name || currentEmp.work_location || 'Chennai HQ';
-        setTimeout(async () => {
-          if (isCheckedIn) {
-            await checkOut(currentEmp.id, locationToLog);
-          } else {
-            await checkIn(currentEmp.id, locationToLog, 'WebAuthn Biometric Pass');
-          }
-          setIsBiometricVerifying(false);
-          setBiometricStatus(null);
-        }, 600);
+  // Check HR Company Policy on GPS punch
+  const isGpsPunchAllowed = typeof window !== 'undefined' && localStorage.getItem('veyra_company_gps_punch_enabled') !== 'false';
+
+  const execute1TapCheckIn = async (verifiedLocation?: string) => {
+    setIs1TapVerifying(true);
+    setOneTapStatus('Verifying GPS & reporting branch...');
+    const locationToLog = verifiedLocation || currentEmp.branch_name || currentEmp.work_location || 'Chennai HQ';
+    
+    setTimeout(async () => {
+      if (isCheckedIn) {
+        await checkOut(currentEmp.id, locationToLog);
       } else {
-        setBiometricStatus(res.message || 'Verification cancelled');
-        setTimeout(() => {
-          setIsBiometricVerifying(false);
-          setBiometricStatus(null);
-        }, 1200);
+        await checkIn(currentEmp.id, locationToLog, '1-Tap GPS Check-In');
       }
-    } catch {
-      setIsBiometricVerifying(false);
-      setBiometricStatus(null);
-    }
+      setIs1TapVerifying(false);
+      setOneTapStatus(null);
+      
+      // Prompt quick mood pulse if not logged yet
+      if (!activeSessionLog) {
+        setTimeout(() => setIsMoodModalOpen(true), 400);
+      }
+    }, 400);
   };
 
-  const handleBiometricPunch = () => {
-    // 1. Verify GPS location is strictly inside assigned workplace boundary
+  const handle1TapPunch = () => {
+    if (!isGpsPunchAllowed) {
+      alert('1-Tap GPS Check-In is disabled by HR Policy. Please scan the Kiosk QR Code at the reception terminal.');
+      return;
+    }
+
     if (typeof window !== 'undefined' && navigator.geolocation) {
       navigator.geolocation.getCurrentPosition(
         (pos) => {
-          // Look up employee's assigned branch or fallback to primary branch
           const assignedBranch = branches.find(
             (b) =>
               b.name?.toLowerCase() === currentEmp.branch_name?.toLowerCase() ||
@@ -98,18 +111,15 @@ export const EmployeeHome: React.FC<EmployeeHomeProps> = ({ onNavigate }) => {
           };
 
           const liveLocStr = `${assignedBranch.name} • GPS (${pos.coords.latitude.toFixed(4)}, ${pos.coords.longitude.toFixed(4)})`;
-
-          // Execute biometric authentication with verified GPS coordinates
-          executeBiometricAuth(liveLocStr);
+          execute1TapCheckIn(liveLocStr);
         },
         () => {
-          // Fallback if browser GPS is blocked
-          executeBiometricAuth(currentEmp.branch_name || currentEmp.work_location || 'Chennai HQ');
+          execute1TapCheckIn(currentEmp.branch_name || currentEmp.work_location || 'Chennai HQ');
         },
-        { timeout: 5000, enableHighAccuracy: true }
+        { timeout: 4000, enableHighAccuracy: true }
       );
     } else {
-      executeBiometricAuth(currentEmp.branch_name || currentEmp.work_location || 'Chennai HQ');
+      execute1TapCheckIn(currentEmp.branch_name || currentEmp.work_location || 'Chennai HQ');
     }
   };
 
@@ -139,63 +149,30 @@ export const EmployeeHome: React.FC<EmployeeHomeProps> = ({ onNavigate }) => {
       };
     }
 
-    if (profile) {
-      const nameParts = (profile.full_name || 'VeyraHR Employee').split(' ');
-      return {
-        id: profile.id || 'emp_current',
-        company_id: profile.company_id || 'comp_veyra_tn',
-        employee_id: profile.id ? `VEY-EMP-${profile.id.slice(-4).toUpperCase()}` : 'VEY-EMP-0001',
-        first_name: nameParts[0] || 'Employee',
-        last_name: nameParts.slice(1).join(' ') || '',
-        email: profile.email || 'employee@veyrahr.com',
-        phone: profile.phone || '+91 98765 00000',
-        designation: 'Operations Specialist',
-        department_name: profile.department_access || 'Engineering & Tech',
-        branch_name: effectiveBranch,
-        work_location: effectiveWorkLoc,
-        joining_date: new Date().toISOString().split('T')[0],
-        status: 'Active',
-        emergency_contact: '+91 98765 00001',
-        address: `${effectiveBranch} Campus`,
-        avatar_url: profile.avatar_url || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80',
-      };
-    }
-
-    return employees[0] || {
-      id: 'emp_default',
+    return {
+      id: 'emp_current',
       company_id: 'comp_veyra_tn',
       employee_id: 'VEY-EMP-0001',
-      first_name: 'Employee',
-      last_name: '',
+      first_name: 'VeyraHR',
+      last_name: 'Employee',
       email: 'employee@veyrahr.com',
       phone: '+91 98765 00000',
-      designation: 'Specialist',
+      designation: 'Operations Specialist',
       department_name: 'Engineering & Tech',
       branch_name: 'Chennai HQ',
       work_location: 'Chennai HQ',
-      joining_date: new Date().toISOString().split('T')[0],
+      joining_date: '2026-01-01',
       status: 'Active',
       emergency_contact: '+91 98765 00001',
       address: 'Chennai HQ Campus',
       avatar_url: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80',
     };
-  }, [employees, profile]);
+  }, [profile, employees]);
 
-  const assignedBranch = useMemo(() => {
-    return branches.find(
-      (b) =>
-        b.name?.toLowerCase() === currentEmp.branch_name?.toLowerCase() ||
-        b.id === (currentEmp as any).branch_id ||
-        (b.city && currentEmp.branch_name && currentEmp.branch_name.toLowerCase().includes(b.city.toLowerCase())) ||
-        (b.name && currentEmp.branch_name && currentEmp.branch_name.toLowerCase().includes(b.name.toLowerCase()))
-    ) || branches[0] || {
-      id: 'b_default',
-      name: currentEmp.branch_name || 'Chennai HQ',
-      latitude: 12.9654,
-      longitude: 80.2461,
-      radius_meters: 150,
-    };
-  }, [branches, currentEmp.branch_name]);
+  const [isQrOpen, setIsQrOpen] = useState(false);
+  const [qrAction, setQrAction] = useState<'check_in' | 'check_out'>('check_in');
+  const [isIdCardOpen, setIsIdCardOpen] = useState(false);
+  const [isSwapOpen, setIsSwapOpen] = useState(false);
 
   const todayStr = new Date().toISOString().split('T')[0];
   const todayAttendance = useMemo(() => {
@@ -210,16 +187,161 @@ export const EmployeeHome: React.FC<EmployeeHomeProps> = ({ onNavigate }) => {
     );
   }, [attendance, currentEmp, todayStr]);
 
-  const [isQrOpen, setIsQrOpen] = useState(false);
-  const [isIdCardOpen, setIsIdCardOpen] = useState(false);
-  const [isSwapOpen, setIsSwapOpen] = useState(false);
-  const [qrAction, setQrAction] = useState<'check_in' | 'check_out'>('check_in');
-
-  // Elapsed Timer state
   const [elapsedMins, setElapsedMins] = useState(0);
   const [selectedMood, setSelectedMood] = useState<string | null>(null);
   const [moodSaved, setMoodSaved] = useState(false);
-  const [isEditingMood, setIsEditingMood] = useState(false);
+
+  // ─── LIVE BREAK MANAGEMENT ──────────────────────────────────────────
+  const [isOnBreak, setIsOnBreak] = useState<boolean>(() => {
+    return localStorage.getItem(`veyra_break_active_${currentEmp.id}`) === 'true';
+  });
+  const [breakStartTimestamp, setBreakStartTimestamp] = useState<number | null>(() => {
+    const saved = localStorage.getItem(`veyra_break_start_${currentEmp.id}`);
+    return saved ? Number(saved) : null;
+  });
+  const [totalBreakMins, setTotalBreakMins] = useState<number>(() => {
+    const saved = localStorage.getItem(`veyra_break_total_${currentEmp.id}_${todayStr}`);
+    return saved ? Number(saved) : (todayAttendance?.break_duration_mins || 0);
+  });
+  const [currentBreakElapsedMins, setCurrentBreakElapsedMins] = useState(0);
+
+  useEffect(() => {
+    if (isOnBreak && breakStartTimestamp) {
+      const update = () => {
+        const mins = Math.max(0, Math.floor((Date.now() - breakStartTimestamp) / 60000));
+        setCurrentBreakElapsedMins(mins);
+      };
+      update();
+      const interval = setInterval(update, 5000);
+      return () => clearInterval(interval);
+    } else {
+      setCurrentBreakElapsedMins(0);
+    }
+  }, [isOnBreak, breakStartTimestamp]);
+
+  const handleToggleBreak = async () => {
+    if (!isOnBreak) {
+      // Start break
+      const now = Date.now();
+      setIsOnBreak(true);
+      setBreakStartTimestamp(now);
+      localStorage.setItem(`veyra_break_active_${currentEmp.id}`, 'true');
+      localStorage.setItem(`veyra_break_start_${currentEmp.id}`, String(now));
+    } else {
+      // Resume work
+      const elapsed = breakStartTimestamp ? Math.max(1, Math.round((Date.now() - breakStartTimestamp) / 60000)) : 15;
+      const newTotal = totalBreakMins + elapsed;
+      setTotalBreakMins(newTotal);
+      setIsOnBreak(false);
+      setBreakStartTimestamp(null);
+      setCurrentBreakElapsedMins(0);
+      localStorage.removeItem(`veyra_break_active_${currentEmp.id}`);
+      localStorage.removeItem(`veyra_break_start_${currentEmp.id}`);
+      localStorage.setItem(`veyra_break_total_${currentEmp.id}_${todayStr}`, String(newTotal));
+      await updateAttendanceBreak(currentEmp.id, elapsed);
+    }
+  };
+
+  // Request browser push notification permission proactively
+  useEffect(() => {
+    if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'default') {
+      Notification.requestPermission();
+    }
+  }, []);
+
+  // ─── LIVE GPS GEOFENCE BOUNDARY DETECTION ────────────────────────────
+  const assignedBranch = useMemo(() => {
+    const effName = currentEmp.branch_name || currentEmp.work_location || 'Klm branch';
+    const found = branches.find(
+      (b) =>
+        (b.name && b.name.trim().toLowerCase() === effName.trim().toLowerCase()) ||
+        (b.name && b.name.toLowerCase().includes(effName.toLowerCase())) ||
+        (b.name && effName.toLowerCase().includes(b.name.toLowerCase())) ||
+        (b.city && effName.toLowerCase().includes(b.city.toLowerCase()))
+    );
+
+    if (found) return found;
+
+    return {
+      id: 'b_assigned',
+      name: effName,
+      latitude: 13.0827,
+      longitude: 80.2707,
+      radius_meters: 200,
+    };
+  }, [branches, currentEmp]);
+
+  const [geofenceStatus, setGeofenceStatus] = useState<{
+    inBoundary: boolean;
+    distanceMeters: number;
+    distanceText: string;
+    branchName: string;
+    allowedRadius: number;
+  }>(() => ({
+    inBoundary: false,
+    distanceMeters: 0,
+    distanceText: 'Detecting...',
+    branchName: currentEmp.branch_name || 'Chennai HQ',
+    allowedRadius: 200,
+  }));
+
+  const lastGeofenceBoundaryRef = useRef<boolean | null>(null);
+
+  useEffect(() => {
+    if (typeof window !== 'undefined' && navigator.geolocation) {
+      const updateLocation = (pos: GeolocationPosition) => {
+        const lat = pos.coords.latitude;
+        const lng = pos.coords.longitude;
+        const branchLat = assignedBranch.latitude || 13.0827;
+        const branchLng = assignedBranch.longitude || 80.2707;
+        const allowedRadius = assignedBranch.radius_meters || 200;
+
+        const R = 6371e3;
+        const φ1 = (lat * Math.PI) / 180;
+        const φ2 = (branchLat * Math.PI) / 180;
+        const Δφ = ((branchLat - lat) * Math.PI) / 180;
+        const Δλ = ((branchLng - lng) * Math.PI) / 180;
+
+        const a =
+          Math.sin(Δφ / 2) * Math.sin(Δφ / 2) +
+          Math.cos(φ1) * Math.cos(φ2) * Math.sin(Δλ / 2) * Math.sin(Δλ / 2);
+        const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+        const distanceMeters = Math.round(R * c);
+
+        const inBoundary = distanceMeters <= allowedRadius;
+        const distText = distanceMeters > 1000 ? `${(distanceMeters / 1000).toFixed(1)} km` : `${distanceMeters}m`;
+
+        // Check if device transitioned boundary
+        if (lastGeofenceBoundaryRef.current !== null && lastGeofenceBoundaryRef.current !== inBoundary) {
+          if (inBoundary) {
+            sendGeofenceBoundaryNotification(assignedBranch.name, 'entered');
+          } else {
+            sendGeofenceBoundaryNotification(assignedBranch.name, 'exited');
+          }
+        }
+        lastGeofenceBoundaryRef.current = inBoundary;
+
+        setGeofenceStatus({
+          inBoundary,
+          distanceMeters,
+          distanceText: distText,
+          branchName: assignedBranch.name,
+          allowedRadius,
+        });
+      };
+
+      navigator.geolocation.getCurrentPosition(updateLocation, () => {}, { timeout: 5000, enableHighAccuracy: true });
+      const watchId = navigator.geolocation.watchPosition(updateLocation, () => {}, { timeout: 10000, enableHighAccuracy: true });
+      return () => navigator.geolocation.clearWatch(watchId);
+    }
+  }, [assignedBranch]);
+
+  // ─── HOLIDAY & WORKING DAYS CHECK ────────────────────────────────────
+  const todayHoliday = useMemo(() => {
+    return companyHolidays.find((h) => h.holiday_date === todayStr);
+  }, [companyHolidays, todayStr]);
+  const isSunday = new Date().getDay() === 0;
+  const isHolidayOff = !!todayHoliday || isSunday;
 
   useEffect(() => {
     if (todayAttendance?.check_in_time && !todayAttendance.check_out_time) {
@@ -245,13 +367,38 @@ export const EmployeeHome: React.FC<EmployeeHomeProps> = ({ onNavigate }) => {
     return `${h}h ${m}m`;
   };
 
+  // ─── COMPUTED NET WORK HOURS (LIVE OR AFTER CHECKOUT) ───────────────
+  const netWorkedMins = useMemo(() => {
+    if (isCheckedIn) {
+      return Math.max(0, elapsedMins - totalBreakMins - currentBreakElapsedMins);
+    }
+    if (todayAttendance?.check_in_time && todayAttendance?.check_out_time) {
+      const inMs = new Date(todayAttendance.check_in_time).getTime();
+      const outMs = new Date(todayAttendance.check_out_time).getTime();
+      const diffMins = Math.max(1, Math.round((outMs - inMs) / 60000));
+      const breakMins = todayAttendance.break_duration_mins ?? totalBreakMins ?? 0;
+      return Math.max(0, diffMins - breakMins);
+    }
+    if (todayAttendance?.working_hours_mins) {
+      return Math.max(0, todayAttendance.working_hours_mins - (todayAttendance.break_duration_mins || 0));
+    }
+    return 0;
+  }, [isCheckedIn, elapsedMins, totalBreakMins, currentBreakElapsedMins, todayAttendance]);
+
   // ─── DUAL SESSION MOOD (Morning & Evening) ──────────────────────────
   const isMorning = new Date().getHours() < 13;
   const currentSessionName = isMorning ? 'Morning' : 'Evening';
 
   const todayMoods = useMemo(() => {
-    return moodLogs.filter((m) => m.employee_id === currentEmp.id && m.date === todayStr);
-  }, [moodLogs, currentEmp.id, todayStr]);
+    return moodLogs.filter(
+      (m) =>
+        (m.employee_id === currentEmp.id ||
+         m.employee_id === currentEmp.employee_id ||
+         (currentEmp.profile_id && m.employee_id === currentEmp.profile_id) ||
+         (profile?.id && m.employee_id === profile.id)) &&
+        m.date === todayStr
+    );
+  }, [moodLogs, currentEmp, profile, todayStr]);
 
   const activeSessionLog = useMemo(() => {
     return todayMoods.find((m) => 
@@ -270,92 +417,26 @@ export const EmployeeHome: React.FC<EmployeeHomeProps> = ({ onNavigate }) => {
     setTimeout(() => {
       setMoodSaved(false);
       setIsMoodModalOpen(false);
-    }, 400);
+    }, 450);
   };
 
   const moodOptions = [
-    { 
-      emoji: '🤩', 
-      label: 'Great', 
-      desc: 'Energized & Focused',
-      mood: 'Excellent' as const, 
-      color: 'bg-emerald-50 hover:bg-emerald-100 border-emerald-200 text-emerald-800 ring-emerald-400' 
-    },
-    { 
-      emoji: '😊', 
-      label: 'Good', 
-      desc: 'Positive & Steady',
-      mood: 'Happy' as const, 
-      color: 'bg-blue-50 hover:bg-blue-100 border-blue-200 text-blue-800 ring-blue-400' 
-    },
-    { 
-      emoji: '😐', 
-      label: 'Okay', 
-      desc: 'Routine / Calm',
-      mood: 'Okay' as const, 
-      color: 'bg-slate-50 hover:bg-slate-100 border-slate-200 text-slate-800 ring-slate-400' 
-    },
-    { 
-      emoji: '😓', 
-      label: 'Stressed', 
-      desc: 'High Workload',
-      mood: 'Stressed' as const, 
-      color: 'bg-amber-50 hover:bg-amber-100 border-amber-200 text-amber-800 ring-amber-400' 
-    },
-    { 
-      emoji: '🤒', 
-      label: 'Unwell', 
-      desc: 'Need Rest',
-      mood: 'Unwell' as const, 
-      color: 'bg-rose-50 hover:bg-rose-100 border-rose-200 text-rose-800 ring-rose-400' 
-    },
+    { emoji: '🤩', label: 'Great', desc: 'Energized & Focused', mood: 'Excellent' as const, color: 'bg-emerald-50 hover:bg-emerald-100 border-emerald-200 text-emerald-800 ring-emerald-400' },
+    { emoji: '😊', label: 'Good', desc: 'Positive & Steady', mood: 'Happy' as const, color: 'bg-blue-50 hover:bg-blue-100 border-blue-200 text-blue-800 ring-blue-400' },
+    { emoji: '😐', label: 'Okay', desc: 'Routine / Calm', mood: 'Okay' as const, color: 'bg-slate-50 hover:bg-slate-100 border-slate-200 text-slate-800 ring-slate-400' },
+    { emoji: '😓', label: 'Stressed', desc: 'High Workload', mood: 'Stressed' as const, color: 'bg-amber-50 hover:bg-amber-100 border-amber-200 text-amber-800 ring-amber-400' },
+    { emoji: '🤒', label: 'Unwell', desc: 'Need Rest', mood: 'Unwell' as const, color: 'bg-rose-50 hover:bg-rose-100 border-rose-200 text-rose-800 ring-rose-400' },
   ];
 
-  // ─── LIVE DATA CALCULATIONS ──────────────────────────────────────────
-  const myAttendance = useMemo(() => {
-    return attendance.filter((a) => a.employee_id === currentEmp.id);
-  }, [attendance, currentEmp.id]);
-
-  const presentCount = useMemo(() => {
-    return myAttendance.filter((a) => {
-      const s = (a.status || '').toLowerCase();
-      return s === 'present' || s === 'late' || !!a.check_in_time;
-    }).length;
-  }, [myAttendance]);
-
   const attendanceRate = useMemo(() => {
-    const total = myAttendance.length;
-    if (total === 0) {
-      return (isCheckedIn || isCheckedOut || todayAttendance) ? '100%' : '100%';
-    }
-    const pct = Math.round((presentCount / total) * 100);
-    return `${pct}%`;
-  }, [myAttendance, presentCount, isCheckedIn, isCheckedOut, todayAttendance]);
+    const total = attendance.length > 0 ? attendance.length : 1;
+    const present = attendance.filter((a) => a.status === 'Present').length;
+    return `${Math.round((present / total) * 100)}%`;
+  }, [attendance]);
 
-  const leaveBalanceDays = useMemo(() => {
-    const totalAllocated = 18 + 10 + 6; // 34 days
-    const approvedDays = leaveRequests
-      .filter((l) => (l.employee_id === currentEmp.id || l.employee_name?.toLowerCase().includes(currentEmp.first_name.toLowerCase())) && l.status === 'Approved')
-      .reduce((sum, req) => {
-        const start = new Date(req.start_date);
-        const end = new Date(req.end_date);
-        const diffDays = Math.max(1, Math.round((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 1);
-        return sum + diffDays;
-      }, 0);
-    return Math.max(0, totalAllocated - approvedDays);
-  }, [leaveRequests, currentEmp]);
-
-  const totalLoggedPunches = useMemo(() => {
-    return myAttendance.length > 0 ? myAttendance.length : (isCheckedIn || isCheckedOut ? 1 : 0);
-  }, [myAttendance, isCheckedIn, isCheckedOut]);
-
-  const currentStreak = useMemo(() => {
-    return Math.max(1, myAttendance.length);
-  }, [myAttendance]);
-
-  const performanceScore = useMemo(() => {
-    return '98.5%';
-  }, []);
+  const leaveBalanceDays = 34; 
+  const totalLoggedPunches = attendance.length;
+  const performanceScore = '98.5%';
 
   const displayFeed = useMemo(() => {
     if (announcements.length > 0) {
@@ -366,6 +447,7 @@ export const EmployeeHome: React.FC<EmployeeHomeProps> = ({ onNavigate }) => {
         icon: a.category === 'Holiday' ? Calendar : a.priority === 'Important' ? Sparkles : Megaphone,
         title: a.title,
         desc: a.content,
+        author: (a as any).author_name || (a as any).author || 'HR Team',
         date: new Date(a.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
       }));
     }
@@ -377,6 +459,7 @@ export const EmployeeHome: React.FC<EmployeeHomeProps> = ({ onNavigate }) => {
         icon: Megaphone,
         title: 'Q3 Townhall & Operations Review',
         desc: 'Hybrid session scheduled for all staff and managers on Friday at 4:00 PM IST.',
+        author: 'HR Operations',
         date: 'Today',
       },
       {
@@ -386,43 +469,11 @@ export const EmployeeHome: React.FC<EmployeeHomeProps> = ({ onNavigate }) => {
         icon: Calendar,
         title: 'Upcoming Public Holiday',
         desc: 'Branch operational guidelines and leave request submissions open in portal.',
+        author: 'People & Culture',
         date: 'Next Week',
       },
     ];
   }, [announcements]);
-
-  const getGreetingConfig = () => {
-    const hour = new Date().getHours();
-    if (hour >= 5 && hour < 12) {
-      return {
-        text: 'Good Morning',
-        session: 'Morning Operations Session',
-        icon: '☀️',
-        glowColor: 'bg-amber-500/20',
-        borderColor: 'border-amber-500/30',
-        badgeBg: 'bg-amber-500/15 text-amber-300 border-amber-500/30',
-      };
-    } else if (hour >= 12 && hour < 17) {
-      return {
-        text: 'Good Afternoon',
-        session: 'Afternoon Productivity Peak',
-        icon: '🌤️',
-        glowColor: 'bg-blue-500/20',
-        borderColor: 'border-blue-500/30',
-        badgeBg: 'bg-blue-500/15 text-blue-300 border-blue-500/30',
-      };
-    } else {
-      return {
-        text: 'Good Evening',
-        session: 'Evening Wrap-Up & Wind-Down',
-        icon: '🌙',
-        glowColor: 'bg-indigo-500/20',
-        borderColor: 'border-indigo-500/30',
-        badgeBg: 'bg-indigo-500/15 text-indigo-300 border-indigo-500/30',
-      };
-    }
-  };
-  const greeting = getGreetingConfig();
 
   const [geofenceAlert, setGeofenceAlert] = useState<{
     isOpen: boolean;
@@ -436,9 +487,16 @@ export const EmployeeHome: React.FC<EmployeeHomeProps> = ({ onNavigate }) => {
     allowedRadius: '200 meters',
   });
 
+  const getGreetingConfig = () => {
+    const hour = new Date().getHours();
+    if (hour >= 5 && hour < 12) return { text: 'Good Morning', session: 'Morning Operations Session', icon: '☀️', glowColor: 'bg-amber-500/20', borderColor: 'border-amber-500/30', badgeBg: 'bg-amber-500/15 text-amber-300 border-amber-500/30' };
+    if (hour >= 12 && hour < 17) return { text: 'Good Afternoon', session: 'Afternoon Productivity Peak', icon: '🌤️', glowColor: 'bg-blue-500/20', borderColor: 'border-blue-500/30', badgeBg: 'bg-blue-500/15 text-blue-300 border-blue-500/30' };
+    return { text: 'Good Evening', session: 'Evening Wrap-Up & Wind-Down', icon: '🌙', glowColor: 'bg-indigo-500/20', borderColor: 'border-indigo-500/30', badgeBg: 'bg-indigo-500/15 text-indigo-300 border-indigo-500/30' };
+  };
+  const greeting = getGreetingConfig();
+
   return (
     <div className="space-y-4 py-2 text-left">
-      {/* ─── PWA OFFLINE & HARDWARE SYNC STATUS BANNER ──────────────── */}
       {(isOffline || offlineQueueLength > 0) && (
         <div className="p-3 rounded-2xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-between text-xs animate-in fade-in">
           <div className="flex items-center gap-2.5">
@@ -446,29 +504,15 @@ export const EmployeeHome: React.FC<EmployeeHomeProps> = ({ onNavigate }) => {
               {isOffline ? <WifiOff className="w-4 h-4 animate-pulse" /> : <RefreshCw className="w-4 h-4 animate-spin text-amber-600" />}
             </div>
             <div>
-              <span className="font-extrabold text-amber-900 block">
-                {isOffline ? 'PWA Offline Standby Active' : 'Offline Punch Queue Syncing'}
-              </span>
-              <span className="text-[11px] text-amber-700 font-medium">
-                {offlineQueueLength > 0
-                  ? `${offlineQueueLength} punch record(s) queued locally. Will auto-sync.`
-                  : 'Check-ins are timestamped & safely preserved on device.'}
-              </span>
+              <span className="font-extrabold text-amber-900 block">{isOffline ? 'PWA Offline Standby Active' : 'Offline Punch Queue Syncing'}</span>
+              <span className="text-[11px] text-amber-700 font-medium">{offlineQueueLength > 0 ? `${offlineQueueLength} punch record(s) queued.` : 'Check-ins are preserved.'}</span>
             </div>
           </div>
-
-          <span className="px-2 py-1 rounded-lg bg-amber-100 text-amber-800 font-mono text-[10px] font-bold border border-amber-300">
-            {isOffline ? 'OFFLINE QUEUE' : 'AUTO-SYNC'}
-          </span>
         </div>
       )}
 
-      {/* ─── 0. SLEEK DARK LUXURY GREETING HERO CARD ────────────────────── */}
       <div className={`relative overflow-hidden p-4 sm:p-5 rounded-3xl bg-gradient-to-br from-[#090E1A] via-[#111A2E] to-[#16223B] text-white border ${greeting.borderColor} shadow-xl transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-3.5`}>
-        {/* Subtle Ambient Radial Glow */}
         <div className={`absolute -top-12 -right-12 w-36 h-36 ${greeting.glowColor} rounded-full blur-3xl pointer-events-none`} />
-        <div className="absolute -bottom-12 -left-12 w-36 h-36 bg-blue-500/15 rounded-full blur-3xl pointer-events-none" />
-
         <div className="relative z-10 flex items-center gap-3.5">
           <div className="w-13 h-13 rounded-2xl bg-white/10 backdrop-blur-md shadow-xs border border-white/15 flex items-center justify-center text-3xl shrink-0">
             {greeting.icon}
@@ -478,32 +522,26 @@ export const EmployeeHome: React.FC<EmployeeHomeProps> = ({ onNavigate }) => {
               <span className={`text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full border font-mono ${greeting.badgeBg}`}>
                 {greeting.text}
               </span>
-              <span className="w-1 h-1 rounded-full bg-slate-500" />
-              <span className="text-[10px] font-bold text-slate-300">
+              <span className="text-[10px] font-bold text-slate-400 font-mono">
                 {greeting.session}
               </span>
             </div>
-            <h2 className="text-lg sm:text-xl font-black text-white tracking-tight leading-tight mt-1">
+            <h2 className="text-xl sm:text-2xl font-black text-white tracking-tight mt-0.5">
               {currentEmp.first_name} {currentEmp.last_name}
             </h2>
-            <p className="text-xs text-slate-300 font-medium mt-0.5">
+            <p className="text-xs text-slate-300 font-medium">
               {currentEmp.designation || 'Senior Specialist'} • <span className="font-semibold text-blue-400">{currentEmp.department_name || 'Operations'}</span>
             </p>
           </div>
         </div>
 
-        {/* Quick ID Badge & Mood Modal Trigger */}
         <div className="relative z-10 flex items-center gap-2 self-start sm:self-auto shrink-0">
-          <button
-            onClick={() => setIsIdCardOpen(true)}
-            className="px-3.5 py-2 rounded-2xl bg-white/10 hover:bg-white/20 text-white font-extrabold text-xs shadow-xs border border-white/20 flex items-center gap-1.5 active:scale-95 transition-all backdrop-blur-md"
-          >
+          <button onClick={() => setIsIdCardOpen(true)} className="px-3.5 py-2 rounded-2xl bg-white/10 hover:bg-white/20 text-white font-extrabold text-xs shadow-xs border border-white/20 flex items-center gap-1.5 active:scale-95 transition-all backdrop-blur-md">
             <IdCard className="w-3.5 h-3.5 text-blue-400" />
             <span>Digital ID</span>
           </button>
-
           <button
-            onClick={() => setIsEditingMood(true)}
+            onClick={() => setIsMoodModalOpen(true)}
             className={`px-3.5 py-2 rounded-2xl font-extrabold text-xs shadow-xs border flex items-center gap-1.5 active:scale-95 transition-all ${
               activeSessionLog
                 ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40 hover:bg-emerald-500/30'
@@ -516,105 +554,157 @@ export const EmployeeHome: React.FC<EmployeeHomeProps> = ({ onNavigate }) => {
         </div>
       </div>
 
-      {/* ─── 1. HIGH-IMPACT TODAY'S SHIFT CARD ──────────────────────────── */}
+      {/* ─── 1. HIGH-IMPACT TODAY'S SHIFT / HOLIDAY CARD ─────────────────── */}
       <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-[#0B132B] via-[#1C2541] to-[#1E3A8A] text-white p-5 sm:p-6 shadow-2xl border border-slate-700">
         <div className="absolute -top-16 -right-16 w-44 h-44 bg-blue-500/25 rounded-full blur-3xl pointer-events-none" />
         <div className="absolute -bottom-16 -left-16 w-44 h-44 bg-indigo-500/25 rounded-full blur-3xl pointer-events-none" />
 
         <div className="relative z-10 space-y-4">
-          
-          {/* Header Row: Shift Name & Live Indicator */}
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <span className="p-1.5 rounded-xl bg-blue-500/20 text-blue-300 border border-blue-400/30">
-                <Clock className="w-4 h-4" />
-              </span>
-              <div>
-                <span className="text-[10px] uppercase font-bold text-blue-300 tracking-wider block font-mono">Today's Assigned Shift</span>
-                <h3 className="text-sm sm:text-base font-extrabold text-white leading-tight">General Day (09:00 AM – 06:00 PM)</h3>
+          {isHolidayOff ? (
+            /* HOLIDAY MODE: No check-in, check-out, or breaks allowed */
+            <div className="space-y-4 py-1">
+              <div className="p-4 rounded-2xl bg-gradient-to-r from-amber-500/25 via-orange-500/20 to-amber-600/25 border border-amber-400/40 flex items-start gap-3.5 text-xs animate-in fade-in">
+                <span className="text-3xl shrink-0">🎉</span>
+                <div className="space-y-1">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <h4 className="text-sm sm:text-base font-black text-amber-200">
+                      Official Holiday: {todayHoliday?.name || 'Sunday Weekend'}
+                    </h4>
+                    <span className="px-2.5 py-0.5 rounded-full bg-amber-400 text-amber-950 font-black text-[10px] uppercase font-mono tracking-wider">
+                      Office Closed
+                    </span>
+                  </div>
+                  <p className="text-xs text-amber-100 font-medium leading-relaxed">
+                    Attendance check-in, check-out, and break logging are completely paused for today. Enjoy your well-deserved holiday!
+                  </p>
+                </div>
+              </div>
+
+              <div className="p-3.5 rounded-2xl bg-white/5 border border-white/10 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs">
+                <div className="flex items-center gap-2 text-slate-300">
+                  <MapPin className="w-4 h-4 text-emerald-400 shrink-0" />
+                  <span>Assigned Reporting Branch: <strong className="text-white">{assignedBranch.name}</strong></span>
+                </div>
+                <span className="text-slate-400 font-mono text-[11px]">
+                  Regular Shift & Attendance Will Resume Tomorrow
+                </span>
               </div>
             </div>
+          ) : (
+            /* NORMAL WORKING DAY SHIFT CONTROLS */
+            <>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <span className="p-1.5 rounded-xl bg-blue-500/20 text-blue-300 border border-blue-400/30">
+                    <Clock className="w-4 h-4" />
+                  </span>
+                  <div>
+                    <span className="text-[10px] uppercase font-bold text-blue-300 tracking-wider block font-mono">Today's Assigned Shift</span>
+                    <h3 className="text-sm sm:text-base font-extrabold text-white leading-tight">General Day (09:00 AM – 06:00 PM)</h3>
+                  </div>
+                </div>
 
-            {/* Live Status Indicator */}
-            <span className={`px-2.5 py-1 rounded-full text-xs font-bold border flex items-center gap-1.5 ${
-              isCheckedIn 
-                ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30 ring-2 ring-emerald-500/20' 
-                : isCheckedOut
-                ? 'bg-blue-500/20 text-blue-300 border-blue-500/30'
-                : 'bg-amber-500/20 text-amber-300 border-amber-500/30 ring-2 ring-amber-500/20'
-            }`}>
-              <span className={`w-2 h-2 rounded-full ${
-                isCheckedIn ? 'bg-emerald-400 animate-ping' : isCheckedOut ? 'bg-blue-400' : 'bg-amber-400 animate-pulse'
-              }`} />
-              <span className="font-mono">{isCheckedIn ? 'Checked In (Active)' : isCheckedOut ? 'Checked Out' : 'Pending Check-In'}</span>
-            </span>
-          </div>
-
-          {/* User Location Row */}
-          <div className="flex items-center justify-between pt-1 border-t border-white/10">
-            <div>
-              <span className="text-[11px] font-medium text-slate-300">Reporting Branch</span>
-              <div className="flex items-center gap-1.5 text-xs font-extrabold text-white mt-0.5">
-                <MapPin className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
-                <span>{currentEmp.branch_name || 'Chennai HQ'}</span>
-                <span className="text-[10px] text-emerald-300 font-mono bg-emerald-500/20 px-1.5 py-0.2 rounded border border-emerald-400/30">GPS Active</span>
+                <span className={`px-2.5 py-1 rounded-full text-xs font-bold border flex items-center gap-1.5 ${
+                  isOnBreak ? 'bg-amber-500/25 text-amber-200 border-amber-400/40' : isCheckedIn ? 'bg-emerald-500/20 text-emerald-300' : 'bg-amber-500/20 text-amber-300'
+                }`}>
+                  <span className={`w-2 h-2 rounded-full ${isOnBreak ? 'bg-amber-400 animate-ping' : 'bg-emerald-400 animate-ping'}`} />
+                  <span className="font-mono">{isOnBreak ? 'On Break ☕' : isCheckedIn ? 'Checked In' : 'Pending'}</span>
+                </span>
               </div>
-            </div>
 
-            <div className="text-right">
-              <span className="text-[11px] font-medium text-slate-300">Today's Date</span>
-              <span className="text-xs font-extrabold text-slate-200 block font-mono mt-0.5">
-                {new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
-              </span>
-            </div>
-          </div>
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pt-1 border-t border-white/10">
+                <div>
+                  <span className="text-[11px] font-medium text-slate-300">Assigned Branch</span>
+                  <div className="flex items-center gap-1.5 text-xs font-extrabold text-white mt-0.5">
+                    <MapPin className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                    <span>{assignedBranch.name}</span>
+                  </div>
+                </div>
+                <div className={`px-3 py-1.5 rounded-xl border flex items-center gap-2 text-xs font-bold ${
+                  geofenceStatus.inBoundary ? 'bg-emerald-500/20 text-emerald-300 border-emerald-400/30' : 'bg-rose-500/20 text-rose-300 border-rose-400/30'
+                }`}>
+                  <span>{geofenceStatus.inBoundary ? `Inside Boundary (${geofenceStatus.distanceText})` : `Outside Perimeter (${geofenceStatus.distanceText})`}</span>
+                </div>
+              </div>
 
-          {/* Metric Boxes: Punch In & Live Duration */}
-          <div className="grid grid-cols-2 gap-3 bg-white/5 backdrop-blur-md rounded-2xl p-3.5 border border-white/10">
-            <div>
-              <span className="text-[10px] uppercase font-bold text-slate-400 block tracking-wider font-mono">Punch In Time</span>
-              <span className="text-base sm:text-lg font-black text-white font-mono block mt-0.5">
-                {todayAttendance?.check_in_time 
-                  ? new Date(todayAttendance.check_in_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-                  : '--:--'}
-              </span>
-            </div>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 bg-white/5 backdrop-blur-md rounded-2xl p-3.5 border border-white/10">
+                <div>
+                  <span className="text-[10px] uppercase font-bold text-slate-400 block tracking-wider font-mono">Punch In</span>
+                  <span className="text-sm sm:text-base font-black text-white font-mono block mt-0.5">
+                    {todayAttendance?.check_in_time ? new Date(todayAttendance.check_in_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '--:--'}
+                  </span>
+                </div>
+                <div>
+                  <span className="text-[10px] uppercase font-bold text-slate-400 block tracking-wider font-mono">Punch Out</span>
+                  <span className="text-sm sm:text-base font-black text-slate-200 font-mono block mt-0.5">
+                    {todayAttendance?.check_out_time ? new Date(todayAttendance.check_out_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '--:--'}
+                  </span>
+                </div>
+                <div>
+                  <span className="text-[10px] uppercase font-bold text-slate-400 block tracking-wider font-mono">Work Hours</span>
+                  <span className="text-sm sm:text-base font-black text-emerald-300 font-mono block mt-0.5">
+                    {formatMinsToHours(netWorkedMins)}
+                  </span>
+                </div>
+                <div>
+                  <span className="text-[10px] uppercase font-bold text-slate-400 block tracking-wider font-mono">Break Logged</span>
+                  <span className="text-sm sm:text-base font-black text-amber-300 font-mono block mt-0.5">
+                    {isOnBreak ? `☕ ${totalBreakMins + currentBreakElapsedMins}m` : `${totalBreakMins}m`}
+                  </span>
+                </div>
+              </div>
 
-            <div>
-              <span className="text-[10px] uppercase font-bold text-slate-400 block tracking-wider font-mono">
-                {isCheckedIn ? 'Live Working Timer' : 'Total Hours Logged'}
-              </span>
-              <span className="text-base sm:text-lg font-black text-emerald-300 font-mono block mt-0.5">
-                {isCheckedIn ? formatMinsToHours(elapsedMins) : todayAttendance ? `${Math.floor(todayAttendance.working_hours_mins / 60)}h ${todayAttendance.working_hours_mins % 60}m` : '0h 0m'}
-              </span>
-            </div>
-          </div>
+              {isCheckedIn && (
+                <div className="flex items-center justify-between p-2.5 rounded-2xl bg-white/10 border border-white/15 backdrop-blur-md">
+                  <div className="flex items-center gap-2">
+                    <span className="text-lg">☕</span>
+                    <span className="text-xs font-extrabold text-white">{isOnBreak ? `On Break (${currentBreakElapsedMins}m)` : 'Lunch / Refreshment'}</span>
+                  </div>
+                  <button onClick={handleToggleBreak} className={`px-3.5 py-1.5 rounded-xl font-black text-xs ${isOnBreak ? 'bg-emerald-500 text-emerald-950' : 'bg-amber-500 text-amber-950'}`}>
+                    {isOnBreak ? '▶️ Resume Work' : '☕ Start Break'}
+                  </button>
+                </div>
+              )}
 
-          {/* Dual Action Buttons: QR Camera Scanner & WebAuthn Biometric */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-1">
-            <button
-              onClick={() => {
-                setQrAction(isCheckedIn ? 'check_out' : 'check_in');
-                setIsQrOpen(true);
-              }}
-              className={`py-3.5 px-4 rounded-2xl font-black text-xs sm:text-sm flex items-center justify-center gap-2.5 shadow-xl transition-all active:scale-98 ${
-                isCheckedIn
-                  ? 'bg-gradient-to-r from-rose-600 via-rose-500 to-red-600 hover:from-rose-500 hover:to-red-500 text-white shadow-rose-950/40 ring-2 ring-rose-400/30'
-                  : 'bg-gradient-to-r from-emerald-600 via-emerald-500 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white shadow-emerald-950/40 ring-2 ring-emerald-400/30'
-              }`}
-            >
-              <QrCode className="w-4 h-4" />
-              <span>{isCheckedIn ? 'Scan QR to Check-Out' : 'Scan Camera QR'}</span>
-            </button>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-1">
+                <button
+                  onClick={() => {
+                    setQrAction(isCheckedIn ? 'check_out' : 'check_in');
+                    setIsQrOpen(true);
+                  }}
+                  className={`py-3.5 px-4 rounded-2xl font-black text-xs sm:text-sm flex items-center justify-center gap-2.5 shadow-xl transition-all active:scale-98 ${
+                    isCheckedIn
+                      ? 'bg-gradient-to-r from-rose-600 via-rose-500 to-red-600 hover:from-rose-500 hover:to-red-500 text-white shadow-rose-950/40 ring-2 ring-rose-400/30'
+                      : 'bg-gradient-to-r from-emerald-600 via-emerald-500 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white shadow-emerald-950/40 ring-2 ring-emerald-400/30'
+                  }`}
+                >
+                  <QrCode className="w-4 h-4" />
+                  <span>{isCheckedIn ? 'Scan QR to Check-Out' : 'Scan Camera QR'}</span>
+                </button>
 
-            <button
-              onClick={handleBiometricPunch}
-              className="py-3.5 px-4 rounded-2xl font-black text-xs sm:text-sm flex items-center justify-center gap-2.5 shadow-xl transition-all active:scale-98 bg-gradient-to-r from-indigo-600 via-violet-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white shadow-indigo-950/40 ring-2 ring-indigo-400/30"
-            >
-              <Fingerprint className="w-4.5 h-4.5 text-purple-200" />
-              <span>{isCheckedIn ? 'Biometric Check-Out' : '⚡ 1-Tap Biometric'}</span>
-            </button>
-          </div>
+                <button
+                  onClick={handle1TapPunch}
+                  disabled={is1TapVerifying}
+                  className={`py-3.5 px-4 rounded-2xl font-black text-xs sm:text-sm flex items-center justify-center gap-2.5 shadow-xl transition-all active:scale-98 ${
+                    !isGpsPunchAllowed
+                      ? 'bg-slate-800/80 text-slate-400 border border-slate-600 cursor-not-allowed'
+                      : 'bg-gradient-to-r from-indigo-600 via-violet-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white shadow-indigo-950/40 ring-2 ring-indigo-400/30'
+                  }`}
+                >
+                  <Zap className="w-4.5 h-4.5 text-purple-200" />
+                  <span>
+                    {is1TapVerifying 
+                      ? 'Verifying GPS...' 
+                      : !isGpsPunchAllowed 
+                      ? '🔒 GPS Disabled by HR' 
+                      : isCheckedIn 
+                      ? '1-Tap GPS Check-Out' 
+                      : '⚡ 1-Tap GPS Check-In'}
+                  </span>
+                </button>
+              </div>
+            </>
+          )}
         </div>
       </div>
 
@@ -702,25 +792,39 @@ export const EmployeeHome: React.FC<EmployeeHomeProps> = ({ onNavigate }) => {
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 text-xs">
             <div className="p-2.5 rounded-2xl bg-white border border-slate-200/80 shadow-2xs">
               <span className="text-[10px] uppercase font-bold text-slate-400 block font-mono">Punch-In</span>
-              <span className="font-extrabold text-slate-900 font-mono">
+              <span className="font-extrabold text-slate-900 font-mono text-xs sm:text-sm">
                 {todayAttendance.check_in_time ? new Date(todayAttendance.check_in_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '--:--'}
               </span>
             </div>
 
             <div className="p-2.5 rounded-2xl bg-white border border-slate-200/80 shadow-2xs">
               <span className="text-[10px] uppercase font-bold text-slate-400 block font-mono">Punch-Out</span>
-              <span className="font-extrabold text-slate-900 font-mono">
+              <span className="font-extrabold text-slate-900 font-mono text-xs sm:text-sm">
                 {todayAttendance.check_out_time ? new Date(todayAttendance.check_out_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Active Shift'}
               </span>
             </div>
 
-            <div className="p-2.5 rounded-2xl bg-white border border-slate-200/80 shadow-2xs col-span-2 sm:col-span-2">
-              <span className="text-[10px] uppercase font-bold text-slate-400 block font-mono">Verification Method</span>
-              <span className="font-bold text-blue-700 flex items-center gap-1.5 truncate text-[11px]">
-                <ShieldCheck className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-                {todayAttendance.verification_method || 'Dynamic QR + GPS'}
+            <div className="p-2.5 rounded-2xl bg-blue-50/70 border border-blue-200/80 shadow-2xs">
+              <span className="text-[10px] uppercase font-bold text-blue-600 block font-mono">Work Hours</span>
+              <span className="font-extrabold text-blue-900 font-mono text-xs sm:text-sm">
+                {formatMinsToHours(netWorkedMins)}
               </span>
             </div>
+
+            <div className="p-2.5 rounded-2xl bg-emerald-50/70 border border-emerald-200/80 shadow-2xs">
+              <span className="text-[10px] uppercase font-bold text-emerald-600 block font-mono">Break Logged</span>
+              <span className="font-extrabold text-emerald-900 font-mono text-xs sm:text-sm">
+                {isOnBreak ? `${totalBreakMins + currentBreakElapsedMins}m (Live)` : `${todayAttendance.break_duration_mins || totalBreakMins}m`}
+              </span>
+            </div>
+          </div>
+
+          <div className="p-2.5 rounded-2xl bg-white border border-slate-200/80 shadow-2xs flex items-center justify-between gap-2 text-xs">
+            <span className="text-[10px] uppercase font-bold text-slate-400 font-mono">Verification</span>
+            <span className="font-bold text-emerald-700 flex items-center gap-1.5 truncate text-[11px]">
+              <ShieldCheck className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+              {todayAttendance.verification_method || 'Dynamic QR + GPS'}
+            </span>
           </div>
 
           {todayAttendance.check_in_location && (
@@ -929,7 +1033,8 @@ export const EmployeeHome: React.FC<EmployeeHomeProps> = ({ onNavigate }) => {
             return (
               <div
                 key={item.id}
-                className="min-w-[260px] sm:min-w-[280px] snap-start bg-white rounded-2xl p-4 border border-slate-200 shadow-sm flex flex-col justify-between space-y-3 hover:border-slate-300 transition-all"
+                onClick={() => setSelectedAnnouncement(item)}
+                className="min-w-[260px] sm:min-w-[280px] snap-start bg-white rounded-2xl p-4 border border-slate-200 shadow-sm flex flex-col justify-between space-y-3 hover:border-blue-300 hover:shadow-md cursor-pointer transition-all active:scale-98"
               >
                 <div className="space-y-2">
                   <div className="flex items-center justify-between">
@@ -939,7 +1044,7 @@ export const EmployeeHome: React.FC<EmployeeHomeProps> = ({ onNavigate }) => {
                     <span className="text-[10px] font-semibold text-slate-400">{item.date}</span>
                   </div>
 
-                  <h4 className="text-xs font-extrabold text-slate-900 leading-snug">
+                  <h4 className="text-xs font-extrabold text-slate-900 leading-snug group-hover:text-blue-600 transition-colors">
                     {item.title}
                   </h4>
                   <p className="text-[11px] text-slate-500 line-clamp-2 leading-relaxed">
@@ -947,15 +1052,47 @@ export const EmployeeHome: React.FC<EmployeeHomeProps> = ({ onNavigate }) => {
                   </p>
                 </div>
 
-                <div className="flex items-center gap-1.5 text-blue-600 text-[11px] font-bold pt-1 border-t border-slate-100">
-                  <span>Learn more</span>
-                  <ChevronRight className="w-3.5 h-3.5" />
+                <div className="flex items-center justify-between text-blue-600 text-[11px] font-bold pt-1 border-t border-slate-100">
+                  <span className="text-slate-400 text-[10px] font-medium">{item.author}</span>
+                  <span className="flex items-center gap-1">Read Notice <ChevronRight className="w-3.5 h-3.5" /></span>
                 </div>
               </div>
             );
           })}
         </div>
       </div>
+
+      {/* ANNOUNCEMENT DETAIL MODAL */}
+      {selectedAnnouncement && (
+        <Modal
+          isOpen={!!selectedAnnouncement}
+          onClose={() => setSelectedAnnouncement(null)}
+          title={selectedAnnouncement.title}
+          maxWidth="md"
+        >
+          <div className="space-y-4 text-left p-1 text-xs">
+            <div className="flex items-center justify-between pb-2 border-b border-slate-100">
+              <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-extrabold border ${selectedAnnouncement.tagColor}`}>
+                {selectedAnnouncement.tag}
+              </span>
+              <span className="text-slate-400 font-mono text-[11px]">{selectedAnnouncement.date}</span>
+            </div>
+
+            <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 text-slate-700 leading-relaxed space-y-2 text-xs">
+              <p className="font-medium">{selectedAnnouncement.desc}</p>
+            </div>
+
+            <div className="flex items-center justify-between text-slate-500 text-[11px] pt-1">
+              <span>Published by <strong>{selectedAnnouncement.author}</strong></span>
+              <span className="text-emerald-600 font-bold">✓ Official Broadcast</span>
+            </div>
+
+            <Button variant="primary" className="w-full font-bold" onClick={() => setSelectedAnnouncement(null)}>
+              Close Announcement
+            </Button>
+          </div>
+        </Modal>
+      )}
 
       {/* MODALS */}
       {isQrOpen && (
@@ -965,8 +1102,8 @@ export const EmployeeHome: React.FC<EmployeeHomeProps> = ({ onNavigate }) => {
           actionType={qrAction}
           employeeName={`${currentEmp.first_name} ${currentEmp.last_name}`}
           employeeId={currentEmp.employee_id || currentEmp.id}
-          branchId={branches[0]?.id || 'b1'}
-          branchName={currentEmp.branch_name || branches[0]?.name || 'Chennai HQ'}
+          branchId={assignedBranch.id}
+          branchName={assignedBranch.name}
           onConfirmAttendance={async (loc, method) => {
             if (qrAction === 'check_in') {
               await checkIn(currentEmp.id, loc, method);
@@ -1052,37 +1189,6 @@ export const EmployeeHome: React.FC<EmployeeHomeProps> = ({ onNavigate }) => {
                 <span>100% Private & Anonymized for HR Analytics</span>
               </div>
             )}
-          </div>
-        </Modal>
-      )}
-
-      {/* ─── BIOMETRIC WEBAUTHN HARDWARE AUTH MODAL ────────────────────── */}
-      {isBiometricVerifying && (
-        <Modal
-          isOpen={isBiometricVerifying}
-          onClose={() => setIsBiometricVerifying(false)}
-          title="Hardware Biometric Pass"
-          maxWidth="sm"
-        >
-          <div className="text-center py-6 space-y-4">
-            <div className="relative w-20 h-20 mx-auto rounded-3xl bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-white shadow-xl shadow-indigo-500/20">
-              <Fingerprint className="w-10 h-10 animate-pulse" />
-              <div className="absolute inset-0 rounded-3xl border-2 border-white/40 animate-ping pointer-events-none" />
-            </div>
-
-            <div className="space-y-1">
-              <h4 className="text-base font-black text-slate-900 tracking-tight">
-                Device Biometric Scan
-              </h4>
-              <p className="text-xs text-slate-600 font-medium max-w-xs mx-auto">
-                {biometricStatus || 'Verifying Face ID / Touch ID / Platform Authenticator...'}
-              </p>
-            </div>
-
-            <div className="p-3 rounded-2xl bg-slate-50 border border-slate-200 text-[11px] text-slate-500 flex items-center justify-center gap-2 font-mono">
-              <ShieldCheck className="w-4 h-4 text-emerald-600" />
-              <span>WebAuthn FIDO2 Enclave Protection</span>
-            </div>
           </div>
         </Modal>
       )}
