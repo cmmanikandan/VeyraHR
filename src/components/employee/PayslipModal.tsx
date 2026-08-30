@@ -26,15 +26,21 @@ interface PayslipModalProps {
     specialAllowance?: number;
     conveyance?: number;
     overtimeEarnings?: number;
+    performanceBonus?: number;
     pfDeduction?: number;
     professionalTax?: number;
     tdsTax?: number;
+    medicalInsurance?: number;
     leaveDeductions?: number;
     totalDeductions?: number;
     grossSalary?: number;
     netPayable?: number;
     daysPresent?: number;
     totalWorkingDays?: number;
+    lopDays?: number;
+    bankRef?: string;
+    paymentDate?: string;
+    paymentMode?: string;
   };
 }
 
@@ -45,22 +51,28 @@ export const PayslipModal: React.FC<PayslipModalProps> = ({
   month = 'August 2026',
   payrollData,
 }) => {
-  // Dynamic or default earnings breakdown
+  // Dynamic earnings breakdown
   const basicPay = payrollData?.baseSalary ?? 48000;
   const hra = payrollData?.hra ?? 19200;
   const specialAllowance = payrollData?.specialAllowance ?? 12800;
   const conveyance = payrollData?.conveyance ?? 4000;
   const overtimeEarnings = payrollData?.overtimeEarnings ?? 0;
-  const grossEarnings = payrollData?.grossSalary ?? (basicPay + hra + specialAllowance + conveyance + overtimeEarnings);
+  const performanceBonus = payrollData?.performanceBonus ?? 0;
+  const grossEarnings = payrollData?.grossSalary ?? (basicPay + hra + specialAllowance + conveyance + overtimeEarnings + performanceBonus);
 
-  // Dynamic or default deductions breakdown
+  // Dynamic deductions breakdown
   const pf = payrollData?.pfDeduction ?? 5760;
   const professionalTax = payrollData?.professionalTax ?? 200;
   const tds = payrollData?.tdsTax ?? 3500;
+  const medicalInsurance = payrollData?.medicalInsurance ?? 1200;
   const leaveDeductions = payrollData?.leaveDeductions ?? 0;
-  const totalDeductions = payrollData?.totalDeductions ?? (pf + professionalTax + tds + leaveDeductions);
+  const totalDeductions = payrollData?.totalDeductions ?? (pf + professionalTax + tds + medicalInsurance + leaveDeductions);
 
   const netSalary = payrollData?.netPayable ?? (grossEarnings - totalDeductions);
+  const bankRef = payrollData?.bankRef || `HDFC-NEFT-${Math.floor(1000000 + Math.random() * 9000000)}`;
+  const paymentDate = payrollData?.paymentDate || `31 ${month.slice(0, 3)} 2026`;
+  const daysPresent = payrollData?.daysPresent ?? 22;
+  const totalWorkingDays = payrollData?.totalWorkingDays ?? 22;
 
   const handlePrint = () => {
     window.print();
@@ -88,7 +100,7 @@ export const PayslipModal: React.FC<PayslipModalProps> = ({
           </div>
         </div>
 
-        {/* Employee Summary Card */}
+        {/* Employee & Bank Summary Card */}
         <div className="bg-slate-50 rounded-2xl p-4 border border-slate-200 grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
           <div>
             <span className="text-[10px] uppercase font-bold text-slate-400 block">Employee Name</span>
@@ -102,12 +114,34 @@ export const PayslipModal: React.FC<PayslipModalProps> = ({
 
           <div>
             <span className="text-[10px] uppercase font-bold text-slate-400 block">Designation</span>
-            <span className="font-bold text-slate-800 mt-0.5 block truncate">{employee.designation || 'Software Engineer'}</span>
+            <span className="font-bold text-slate-800 mt-0.5 block truncate">{employee.designation || 'Operations Specialist'}</span>
           </div>
 
           <div>
-            <span className="text-[10px] uppercase font-bold text-slate-400 block">Work Location</span>
-            <span className="font-bold text-slate-800 mt-0.5 block">{employee.work_location || 'Chennai HQ'}</span>
+            <span className="text-[10px] uppercase font-bold text-slate-400 block">Joining Date</span>
+            <span className="font-bold text-slate-800 mt-0.5 block font-mono">{employee.joining_date || '2024-03-01'}</span>
+          </div>
+
+          <div>
+            <span className="text-[10px] uppercase font-bold text-slate-400 block">Bank Account</span>
+            <span className="font-mono font-bold text-slate-800 mt-0.5 block">
+              {employee.bank_account ? `•••• ${employee.bank_account.slice(-4)}` : 'HDFC •••• 4928'}
+            </span>
+          </div>
+
+          <div>
+            <span className="text-[10px] uppercase font-bold text-slate-400 block">IFSC / Branch</span>
+            <span className="font-mono font-bold text-slate-800 mt-0.5 block">{employee.ifsc_code || 'HDFC0000240'}</span>
+          </div>
+
+          <div>
+            <span className="text-[10px] uppercase font-bold text-slate-400 block">Attendance Muster</span>
+            <span className="font-mono font-bold text-emerald-700 mt-0.5 block">{daysPresent} / {totalWorkingDays} Days</span>
+          </div>
+
+          <div>
+            <span className="text-[10px] uppercase font-bold text-slate-400 block">Transaction Ref</span>
+            <span className="font-mono font-bold text-slate-700 mt-0.5 block truncate">{bankRef}</span>
           </div>
         </div>
 
@@ -117,7 +151,7 @@ export const PayslipModal: React.FC<PayslipModalProps> = ({
           {/* Earnings Column */}
           <div className="border border-slate-200 rounded-2xl overflow-hidden">
             <div className="bg-emerald-50/70 px-4 py-2 border-b border-slate-200 flex items-center justify-between">
-              <span className="text-xs font-extrabold text-emerald-900 uppercase tracking-wider">Earnings</span>
+              <span className="text-xs font-extrabold text-emerald-900 uppercase tracking-wider">Earnings (Credits)</span>
               <span className="text-xs font-extrabold text-emerald-800">Amount (₹)</span>
             </div>
             <div className="divide-y divide-slate-100 text-xs p-3 space-y-2">
@@ -137,10 +171,18 @@ export const PayslipModal: React.FC<PayslipModalProps> = ({
                 <span>Conveyance Allowance</span>
                 <span className="font-mono font-semibold">₹{conveyance.toLocaleString('en-IN')}</span>
               </div>
-              <div className="flex justify-between text-slate-700 pt-1.5">
-                <span>Overtime / Performance Incentive</span>
-                <span className="font-mono font-semibold">₹{overtimeEarnings.toLocaleString('en-IN')}</span>
-              </div>
+              {overtimeEarnings > 0 && (
+                <div className="flex justify-between text-blue-700 pt-1.5">
+                  <span>Overtime Hours Incentive</span>
+                  <span className="font-mono font-semibold">₹{overtimeEarnings.toLocaleString('en-IN')}</span>
+                </div>
+              )}
+              {performanceBonus > 0 && (
+                <div className="flex justify-between text-emerald-700 pt-1.5">
+                  <span>Performance Incentive</span>
+                  <span className="font-mono font-semibold">₹{performanceBonus.toLocaleString('en-IN')}</span>
+                </div>
+              )}
             </div>
             <div className="bg-slate-50 px-4 py-2.5 border-t border-slate-200 flex justify-between text-xs font-extrabold text-slate-900">
               <span>Gross Earnings</span>
@@ -151,12 +193,12 @@ export const PayslipModal: React.FC<PayslipModalProps> = ({
           {/* Deductions Column */}
           <div className="border border-slate-200 rounded-2xl overflow-hidden">
             <div className="bg-rose-50/70 px-4 py-2 border-b border-slate-200 flex items-center justify-between">
-              <span className="text-xs font-extrabold text-rose-900 uppercase tracking-wider">Deductions</span>
+              <span className="text-xs font-extrabold text-rose-900 uppercase tracking-wider">Deductions (Debits)</span>
               <span className="text-xs font-extrabold text-rose-800">Amount (₹)</span>
             </div>
             <div className="divide-y divide-slate-100 text-xs p-3 space-y-2">
               <div className="flex justify-between text-slate-700">
-                <span>Provident Fund (PF)</span>
+                <span>Provident Fund (EPF 12%)</span>
                 <span className="font-mono font-semibold">₹{pf.toLocaleString('en-IN')}</span>
               </div>
               <div className="flex justify-between text-slate-700 pt-1.5">
@@ -168,9 +210,15 @@ export const PayslipModal: React.FC<PayslipModalProps> = ({
                 <span className="font-mono font-semibold">₹{tds.toLocaleString('en-IN')}</span>
               </div>
               <div className="flex justify-between text-slate-700 pt-1.5">
-                <span>Leave / Absence Deductions</span>
-                <span className="font-mono font-semibold">₹{leaveDeductions.toLocaleString('en-IN')}</span>
+                <span>Group Medical Insurance</span>
+                <span className="font-mono font-semibold">₹{medicalInsurance.toLocaleString('en-IN')}</span>
               </div>
+              {leaveDeductions > 0 && (
+                <div className="flex justify-between text-rose-700 pt-1.5">
+                  <span>Leave / Absence LOP Deductions</span>
+                  <span className="font-mono font-semibold">-₹{leaveDeductions.toLocaleString('en-IN')}</span>
+                </div>
+              )}
             </div>
             <div className="bg-slate-50 px-4 py-2.5 border-t border-slate-200 flex justify-between text-xs font-extrabold text-slate-900">
               <span>Total Deductions</span>

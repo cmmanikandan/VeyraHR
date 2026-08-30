@@ -165,6 +165,13 @@ export interface Employee {
   status: 'Active' | 'Inactive' | 'On Leave';
   avatar_url?: string;
   password?: string;
+  base_salary?: number;
+  bank_name?: string;
+  bank_account?: string;
+  ifsc_code?: string;
+  pan_no?: string;
+  pf_no?: string;
+  uan_no?: string;
   created_at?: string;
 }
 
@@ -357,3 +364,41 @@ export interface EmployeeDocument {
   verification_hash?: string;
   custom_image_url?: string;
 }
+
+export interface PayrollRecord {
+  id: string;
+  company_id?: string;
+  employee_id: string;
+  employee_name?: string;
+  month: string; // e.g. "August 2026", "July 2026"
+  period_start: string; // e.g. "2026-08-01"
+  period_end: string; // e.g. "2026-08-31"
+  base_salary: number;
+  hra: number;
+  special_allowance: number;
+  conveyance: number;
+  overtime_earnings: number;
+  performance_bonus?: number;
+  gross_salary: number;
+  pf_deduction: number;
+  professional_tax: number;
+  tds_tax: number;
+  medical_insurance?: number;
+  leave_deductions: number;
+  total_deductions: number;
+  net_payable: number;
+  payment_status: 'Paid' | 'Processed' | 'Pending';
+  payment_date?: string;
+  bank_ref?: string;
+  payment_mode?: string;
+  days_present: number;
+  total_working_days: number;
+  lop_days?: number;
+  approved_leaves?: number;
+  ot_hours?: number;
+  remarks?: string;
+  released_by_hr?: boolean;
+  released_at?: string;
+  created_at: string;
+}
+

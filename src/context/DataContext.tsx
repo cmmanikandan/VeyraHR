@@ -17,7 +17,8 @@ import {
   HRManager,
   SecuritySession,
   CompanyHoliday,
-  EmployeeDocument
+  EmployeeDocument,
+  PayrollRecord
 } from '../types/database';
 import { supabase } from '../lib/supabase';
 import { getOfflineQueue, processOfflineQueue, enqueueOfflineAttendance } from '../lib/offlineQueue';
@@ -44,6 +45,7 @@ interface DataContextType {
   isOffline: boolean;
   offlineQueueLength: number;
   documents: EmployeeDocument[];
+  payrollRecords: PayrollRecord[];
   
   // Actions
   uploadDocument: (doc: EmployeeDocument) => Promise<void>;
@@ -82,6 +84,10 @@ interface DataContextType {
   assignEmployeeDepartmentAndRole: (employeeId: string, departmentName: string, designation: string) => Promise<void>;
   updateEmployee: (id: string, updates: Partial<Employee>) => Promise<void>;
   addShiftTemplate: (shift: Omit<Shift, 'id'>) => Promise<Shift>;
+  disbursePayroll: (month: string, records: PayrollRecord[]) => Promise<void>;
+  releaseEmployeePayslip: (record: PayrollRecord) => Promise<void>;
+  updatePayrollRecord: (record: PayrollRecord) => Promise<void>;
+  getEmployeePayslipsHistory: (employee: Employee) => PayrollRecord[];
   refreshData: () => Promise<void>;
 }
 
@@ -343,6 +349,16 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, []);
   const [auditLogs, setAuditLogs] = useState<AuditLog[]>([]);
   const [documents, setDocuments] = useState<EmployeeDocument[]>([]);
+  const [payrollRecords, setPayrollRecords] = useState<PayrollRecord[]>(() => {
+    try {
+      const saved = localStorage.getItem('veyra_payroll_records');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) return parsed;
+      }
+    } catch {}
+    return [];
+  });
   const [companyHolidays, setCompanyHolidays] = useState<CompanyHoliday[]>([
     { id: 'hol_01', company_id: 'comp_veyra_tn', name: 'New Year’s Day', holiday_date: '2026-01-01', is_optional: false },
     { id: 'hol_02', company_id: 'comp_veyra_tn', name: 'Pongal / Makar Sankranti', holiday_date: '2026-01-14', is_optional: false },
@@ -1597,6 +1613,242 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return newShift;
   };
 
+  const disbursePayroll = async (month: string, records: PayrollRecord[]) => {
+    const timestamp = new Date().toISOString();
+    const formattedDate = new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+
+    const updatedProcessedRecords = records.map((r) => ({
+      ...r,
+      payment_status: 'Paid' as const,
+      released_by_hr: true,
+      released_at: timestamp,
+      payment_date: r.payment_date || formattedDate,
+      bank_ref: r.bank_ref || `HDFC-NEFT-${Math.floor(1000000 + Math.random() * 9000000)}`,
+      payment_mode: r.payment_mode || 'NEFT / Direct Deposit',
+    }));
+
+    setPayrollRecords((prev) => {
+      const recordMap = new Map<string, PayrollRecord>();
+      prev.forEach((p) => recordMap.set(`${p.employee_id}_${p.month}`, p));
+      updatedProcessedRecords.forEach((p) => recordMap.set(`${p.employee_id}_${p.month}`, p));
+      const combined = Array.from(recordMap.values());
+      try {
+        localStorage.setItem('veyra_payroll_records', JSON.stringify(combined));
+      } catch {}
+      return combined;
+    });
+
+    // Notify employees via desktop notification & in-app inbox
+    updatedProcessedRecords.forEach((r) => {
+      triggerAppNotification({
+        title: `💰 Payslip Released: ${r.month}`,
+        body: `Your net salary of ₹${r.net_payable.toLocaleString('en-IN')} has been disbursed for ${r.month}. Tap to view breakdown.`,
+        url: '/employee/payslips',
+        tag: 'payroll',
+      });
+
+      const notifItem: NotificationItem = {
+        id: `notif_pay_${Date.now()}_${r.employee_id}`,
+        recipient_profile_id: r.employee_id,
+        title: `💰 Salary Disbursed • ${r.month}`,
+        message: `Your net salary of ₹${r.net_payable.toLocaleString('en-IN')} has been credited via ${r.payment_mode || 'Direct Deposit'} (Ref: ${r.bank_ref}).`,
+        type: 'System',
+        is_read: false,
+        link_url: '/employee/payslips',
+        created_at: timestamp,
+      };
+
+      setNotifications((prevNotifs) => {
+        const next = [notifItem, ...prevNotifs];
+        try {
+          localStorage.setItem('veyra_notifications', JSON.stringify(next));
+        } catch {}
+        return next;
+      });
+    });
+  };
+
+  const releaseEmployeePayslip = async (record: PayrollRecord) => {
+    await disbursePayroll(record.month, [record]);
+  };
+
+  const updatePayrollRecord = async (record: PayrollRecord) => {
+    setPayrollRecords((prev) => {
+      const idx = prev.findIndex((p) => (p.employee_id === record.employee_id || p.id === record.id) && p.month === record.month);
+      let updated: PayrollRecord[];
+      if (idx >= 0) {
+        updated = [...prev];
+        updated[idx] = { ...updated[idx], ...record };
+      } else {
+        updated = [record, ...prev];
+      }
+      try {
+        localStorage.setItem('veyra_payroll_records', JSON.stringify(updated));
+      } catch {}
+      return updated;
+    });
+  };
+
+  const getEmployeePayslipsHistory = useCallback((employee: Employee): PayrollRecord[] => {
+    if (!employee) return [];
+
+    const monthNames = [
+      'January', 'February', 'March', 'April', 'May', 'June',
+      'July', 'August', 'September', 'October', 'November', 'December'
+    ];
+
+    // Reference timeline
+    const currentYear = 2026;
+    const currentMonthIdx = 7; // August (0-indexed)
+
+    // Parse joining date
+    let startYear = 2025;
+    let startMonthIdx = 0; // January
+
+    if (employee.joining_date) {
+      const parts = employee.joining_date.split('-');
+      if (parts.length >= 2) {
+        const parsedYear = parseInt(parts[0], 10);
+        const parsedMonth = parseInt(parts[1], 10) - 1;
+        if (!isNaN(parsedYear) && parsedYear >= 2020 && parsedYear <= currentYear) {
+          startYear = parsedYear;
+          startMonthIdx = isNaN(parsedMonth) ? 0 : Math.max(0, Math.min(11, parsedMonth));
+        }
+      }
+    } else {
+      startYear = 2026;
+      startMonthIdx = 2; // March 2026
+    }
+
+    const results: PayrollRecord[] = [];
+
+    const getHash = (str: string) => {
+      let hash = 0;
+      for (let i = 0; i < str.length; i++) {
+        hash = (hash << 5) - hash + str.charCodeAt(i);
+        hash |= 0;
+      }
+      return Math.abs(hash);
+    };
+
+    for (let y = startYear; y <= currentYear; y++) {
+      const startM = (y === startYear) ? startMonthIdx : 0;
+      const endM = (y === currentYear) ? currentMonthIdx : 11;
+
+      for (let m = startM; m <= endM; m++) {
+        const monthStr = `${monthNames[m]} ${y}`;
+        const yearMonthKey = `${y}-${String(m + 1).padStart(2, '0')}`;
+        const isCurrentActiveMonth = (y === currentYear && m === currentMonthIdx);
+
+        // Check if HR has processed/customized an explicit record
+        const explicitRecord = payrollRecords.find(
+          (p) => (p.employee_id === employee.id || p.employee_id === employee.employee_id) && p.month === monthStr
+        );
+
+        if (explicitRecord) {
+          results.push(explicitRecord);
+          continue;
+        }
+
+        // Compute authentic record from actual attendance, leaves, and salary
+        const baseSalary = employee.base_salary || 50000;
+        const hra = Math.round(baseSalary * 0.4);
+        const specialAllowance = Math.round(baseSalary * 0.2);
+        const conveyance = 4000;
+
+        const monthAtt = attendance.filter((a) => {
+          const matchEmp = a.employee_id === employee.id || a.employee_id === employee.employee_id;
+          return matchEmp && a.date && a.date.startsWith(yearMonthKey);
+        });
+
+        const monthLeaves = leaveRequests.filter((l) => {
+          const matchEmp = l.employee_id === employee.id || l.employee_id === employee.employee_id;
+          return matchEmp && l.status === 'Approved' && l.start_date && l.start_date.startsWith(yearMonthKey);
+        });
+
+        const approvedLeaveDays = monthLeaves.reduce((sum, curr) => sum + (Number(curr.total_days) || 1), 0);
+        const standardWorkDays = 22;
+
+        let presentDays = monthAtt.length;
+        if (presentDays === 0) {
+          presentDays = isCurrentActiveMonth ? 20 : (standardWorkDays - approvedLeaveDays);
+        }
+
+        const payableDays = Math.min(standardWorkDays, presentDays + approvedLeaveDays);
+        const lopDays = Math.max(0, standardWorkDays - payableDays);
+
+        const otMins = monthAtt.reduce((sum, curr) => sum + (curr.overtime_mins || 0), 0);
+        const otHours = Math.round(otMins / 60);
+        const hourlyRate = Math.round((baseSalary / (standardWorkDays * 8)) * 1.5);
+        const overtimeEarnings = otHours * hourlyRate;
+
+        const monthOffset = (y - startYear) * 12 + (m - startMonthIdx);
+        const performanceBonus = monthOffset >= 2 ? 5000 : 0;
+
+        const grossSalary = Math.round((baseSalary / standardWorkDays) * payableDays) +
+                            Math.round((hra / standardWorkDays) * payableDays) +
+                            Math.round((specialAllowance / standardWorkDays) * payableDays) +
+                            conveyance +
+                            overtimeEarnings +
+                            performanceBonus;
+
+        const pfDeduction = Math.round(baseSalary * 0.12);
+        const professionalTax = 200;
+        const tdsTax = Math.round(grossSalary * 0.04);
+        const medicalInsurance = 1200;
+        const leaveDeductions = lopDays * Math.round(baseSalary / standardWorkDays);
+
+        const totalDeductions = pfDeduction + professionalTax + tdsTax + medicalInsurance + leaveDeductions;
+        const netPayable = grossSalary - totalDeductions;
+
+        const lastDayOfMonth = new Date(y, m + 1, 0).getDate();
+        const periodStart = `${y}-${String(m + 1).padStart(2, '0')}-01`;
+        const periodEnd = `${y}-${String(m + 1).padStart(2, '0')}-${String(lastDayOfMonth).padStart(2, '0')}`;
+        const paymentDate = `${lastDayOfMonth} ${monthNames[m].slice(0, 3)} ${y}`;
+
+        const hash = getHash(`${employee.id}_${monthStr}_veyra`);
+        const bankRef = `HDFC-NEFT-${(1000000 + (hash % 8999999))}`;
+
+        results.push({
+          id: `ps_${y}_${m}_${employee.id}`,
+          company_id: employee.company_id || 'comp_veyra_tn',
+          employee_id: employee.id,
+          employee_name: `${employee.first_name} ${employee.last_name}`,
+          month: monthStr,
+          period_start: periodStart,
+          period_end: periodEnd,
+          base_salary: baseSalary,
+          hra,
+          special_allowance: specialAllowance,
+          conveyance,
+          overtime_earnings: overtimeEarnings,
+          performance_bonus: performanceBonus,
+          gross_salary: grossSalary,
+          pf_deduction: pfDeduction,
+          professional_tax: professionalTax,
+          tds_tax: tdsTax,
+          medical_insurance: medicalInsurance,
+          leave_deductions: leaveDeductions,
+          total_deductions: totalDeductions,
+          net_payable: netPayable,
+          payment_status: isCurrentActiveMonth ? 'Processed' : 'Paid',
+          payment_date: paymentDate,
+          bank_ref: bankRef,
+          payment_mode: 'NEFT / Direct Deposit',
+          days_present: presentDays,
+          total_working_days: standardWorkDays,
+          lop_days: lopDays,
+          approved_leaves: approvedLeaveDays,
+          ot_hours: otHours,
+          released_by_hr: !isCurrentActiveMonth,
+          created_at: new Date(y, m, lastDayOfMonth).toISOString(),
+        });
+      }
+    }
+
+    return results.reverse();
+  }, [payrollRecords, attendance, leaveRequests]);
+
   return (
     <DataContext.Provider
       value={{
@@ -1620,6 +1872,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         isOffline,
         offlineQueueLength,
         documents,
+        payrollRecords,
         uploadDocument,
         deleteDocument,
         addEmployee,
@@ -1656,6 +1909,10 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         assignEmployeeDepartmentAndRole,
         updateEmployee,
         addShiftTemplate,
+        disbursePayroll,
+        releaseEmployeePayslip,
+        updatePayrollRecord,
+        getEmployeePayslipsHistory,
         refreshData,
       }}
     >

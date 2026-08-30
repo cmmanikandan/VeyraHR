@@ -19,7 +19,9 @@ import {
   Briefcase,
   Users,
   Eye,
-  CheckCircle
+  CheckCircle,
+  Edit2,
+  Lock
 } from 'lucide-react';
 import { Card } from '../../components/ui/Card';
 import { Button } from '../../components/ui/Button';
@@ -28,123 +30,228 @@ import { Modal } from '../../components/ui/Modal';
 import { Avatar } from '../../components/ui/Avatar';
 import { EmptyState } from '../../components/common/EmptyState';
 import { useData } from '../../context/DataContext';
-import { Employee } from '../../types/database';
-
-interface EmployeePayrollRecord {
-  employee: Employee;
-  baseSalary: number;
-  hra: number;
-  specialAllowance: number;
-  conveyance: number;
-  overtimeEarnings: number;
-  grossSalary: number;
-  pfDeduction: number;
-  professionalTax: number;
-  tdsTax: number;
-  leaveDeductions: number;
-  totalDeductions: number;
-  netPayable: number;
-  status: 'Paid' | 'Processed' | 'Pending';
-  daysPresent: number;
-  totalWorkingDays: number;
-}
+import { Employee, PayrollRecord } from '../../types/database';
+import { PayslipModal } from '../../components/employee/PayslipModal';
 
 export const HRPayrollManagement: React.FC = () => {
-  const { employees, attendance, branches } = useData();
+  const { 
+    employees, 
+    attendance, 
+    leaveRequests, 
+    branches, 
+    payrollRecords: globalPayrollRecords, 
+    disbursePayroll, 
+    releaseEmployeePayslip,
+    updateEmployee,
+    updatePayrollRecord 
+  } = useData();
 
   const [selectedMonth, setSelectedMonth] = useState('August 2026');
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedBranch, setSelectedBranch] = useState('All');
-  const [selectedPayroll, setSelectedPayroll] = useState<EmployeePayrollRecord | null>(null);
+  const [selectedEmployeeForPayslip, setSelectedEmployeeForPayslip] = useState<Employee | null>(null);
+  const [selectedPayrollRecord, setSelectedPayrollRecord] = useState<PayrollRecord | null>(null);
+  const [isEditingSalaryEmp, setIsEditingSalaryEmp] = useState<Employee | null>(null);
+  const [editBaseSalary, setEditBaseSalary] = useState<number>(50000);
+  const [editBankAccount, setEditBankAccount] = useState<string>('');
+  const [editIfsc, setEditIfsc] = useState<string>('');
   const [isProcessing, setIsProcessing] = useState(false);
   const [processedSuccess, setProcessedSuccess] = useState<string | null>(null);
 
-  // Compute live payroll for each employee based on attendance & base standards
-  const payrollRecords: EmployeePayrollRecord[] = useMemo(() => {
+  const availableMonths = [
+    'August 2026',
+    'July 2026',
+    'June 2026',
+    'May 2026',
+    'April 2026',
+    'March 2026',
+    'February 2026',
+    'January 2026',
+  ];
+
+  // Compute or retrieve live payroll for each employee for the selectedMonth
+  const computedPayrollRecords: (PayrollRecord & { employee: Employee })[] = useMemo(() => {
     const totalWorkingDays = 22;
 
-    return employees.map((emp, idx) => {
-      const empAttendance = attendance.filter((a) => a.employee_id === emp.id && (a.status === 'Present' || a.status === 'Late' || !!a.check_in_time));
-      const daysPresent = empAttendance.length;
+    // Convert month string "August 2026" to "2026-08"
+    const monthNames: Record<string, string> = {
+      January: '01', February: '02', March: '03', April: '04',
+      May: '05', June: '06', July: '07', August: '08',
+      September: '09', October: '10', November: '11', December: '12'
+    };
+    const [mName, yStr] = selectedMonth.split(' ');
+    const yearMonthPrefix = `${yStr || '2026'}-${monthNames[mName] || '08'}`;
+    const isCurrentActiveMonth = selectedMonth === 'August 2026';
 
-      // Tiered base salary estimation
-      const baseSalary = 50000 + (idx % 4) * 15000;
+    return employees.map((emp, idx) => {
+      // 1. Check if HR previously saved an explicit record for this employee & month
+      const existing = globalPayrollRecords.find(
+        (p) => (p.employee_id === emp.id || p.employee_id === emp.employee_id) && p.month === selectedMonth
+      );
+
+      if (existing) {
+        return {
+          ...existing,
+          employee: emp,
+        };
+      }
+
+      // 2. Otherwise calculate based on real employee salary, attendance punches & approved leaves
+      const baseSalary = emp.base_salary || (50000 + (idx % 4) * 15000);
       const hra = Math.round(baseSalary * 0.4);
       const specialAllowance = Math.round(baseSalary * 0.2);
       const conveyance = 4000;
-      const overtimeEarnings = (idx % 2 === 0) ? 3500 : 0;
 
-      const grossSalary = baseSalary + hra + specialAllowance + conveyance + overtimeEarnings;
+      const empAttendance = attendance.filter((a) => {
+        const matchId = a.employee_id === emp.id || a.employee_id === emp.employee_id;
+        return matchId && a.date && a.date.startsWith(yearMonthPrefix);
+      });
+
+      const empLeaves = leaveRequests.filter((l) => {
+        const matchId = l.employee_id === emp.id || l.employee_id === emp.employee_id;
+        return matchId && l.status === 'Approved' && l.start_date && l.start_date.startsWith(yearMonthPrefix);
+      });
+
+      const approvedLeaveDays = empLeaves.reduce((sum, curr) => sum + (Number(curr.total_days) || 1), 0);
+      let daysPresent = empAttendance.length;
+      if (daysPresent === 0) {
+        daysPresent = isCurrentActiveMonth ? 20 : (totalWorkingDays - approvedLeaveDays);
+      }
+
+      const payableDays = Math.min(totalWorkingDays, daysPresent + approvedLeaveDays);
+      const lopDays = Math.max(0, totalWorkingDays - payableDays);
+
+      const otMins = empAttendance.reduce((sum, curr) => sum + (curr.overtime_mins || 0), 0);
+      const otHours = Math.round(otMins / 60);
+      const hourlyRate = Math.round((baseSalary / (totalWorkingDays * 8)) * 1.5);
+      const overtimeEarnings = otHours * hourlyRate;
+      const performanceBonus = idx % 2 === 0 ? 5000 : 0;
+
+      const grossSalary = Math.round((baseSalary / totalWorkingDays) * payableDays) +
+                          Math.round((hra / totalWorkingDays) * payableDays) +
+                          Math.round((specialAllowance / totalWorkingDays) * payableDays) +
+                          conveyance +
+                          overtimeEarnings +
+                          performanceBonus;
 
       const pfDeduction = Math.round(baseSalary * 0.12);
       const professionalTax = 200;
-      const tdsTax = Math.round(grossSalary * 0.05);
-      const unpaidDays = Math.max(0, totalWorkingDays - daysPresent);
-      const leaveDeductions = Math.round((grossSalary / totalWorkingDays) * unpaidDays);
+      const tdsTax = Math.round(grossSalary * 0.04);
+      const medicalInsurance = 1200;
+      const leaveDeductions = lopDays * Math.round(baseSalary / totalWorkingDays);
 
-      const totalDeductions = pfDeduction + professionalTax + tdsTax + leaveDeductions;
+      const totalDeductions = pfDeduction + professionalTax + tdsTax + medicalInsurance + leaveDeductions;
       const netPayable = grossSalary - totalDeductions;
 
+      const lastDayOfMonth = new Date(parseInt(yStr || '2026', 10), parseInt(monthNames[mName] || '8', 10), 0).getDate();
+      const periodStart = `${yStr || '2026'}-${monthNames[mName] || '08'}-01`;
+      const periodEnd = `${yStr || '2026'}-${monthNames[mName] || '08'}-${String(lastDayOfMonth).padStart(2, '0')}`;
+      const paymentDate = `${lastDayOfMonth} ${mName.slice(0, 3)} ${yStr || '2026'}`;
+
       return {
-        employee: emp,
-        baseSalary,
+        id: `ps_${yStr}_${mName}_${emp.id}`,
+        company_id: emp.company_id || 'comp_veyra_tn',
+        employee_id: emp.id,
+        employee_name: `${emp.first_name} ${emp.last_name}`,
+        month: selectedMonth,
+        period_start: periodStart,
+        period_end: periodEnd,
+        base_salary: baseSalary,
         hra,
-        specialAllowance,
+        special_allowance: specialAllowance,
         conveyance,
-        overtimeEarnings,
-        grossSalary,
-        pfDeduction,
-        professionalTax,
-        tdsTax,
-        leaveDeductions,
-        totalDeductions,
-        netPayable,
-        status: 'Processed',
-        daysPresent,
-        totalWorkingDays,
+        overtime_earnings: overtimeEarnings,
+        performance_bonus: performanceBonus,
+        gross_salary: grossSalary,
+        pf_deduction: pfDeduction,
+        professional_tax: professionalTax,
+        tds_tax: tdsTax,
+        medical_insurance: medicalInsurance,
+        leave_deductions: leaveDeductions,
+        total_deductions: totalDeductions,
+        net_payable: netPayable,
+        payment_status: isCurrentActiveMonth ? 'Processed' : 'Paid',
+        payment_date: paymentDate,
+        bank_ref: `HDFC-NEFT-${Math.floor(1000000 + Math.random() * 9000000)}`,
+        payment_mode: 'NEFT / Direct Deposit',
+        days_present: daysPresent,
+        total_working_days: totalWorkingDays,
+        lop_days: lopDays,
+        approved_leaves: approvedLeaveDays,
+        ot_hours: otHours,
+        released_by_hr: !isCurrentActiveMonth,
+        created_at: new Date().toISOString(),
+        employee: emp,
       };
     });
-  }, [employees, attendance]);
+  }, [employees, attendance, leaveRequests, selectedMonth, globalPayrollRecords]);
 
   const filteredRecords = useMemo(() => {
-    return payrollRecords.filter((rec) => {
+    return computedPayrollRecords.filter((rec) => {
       const matchSearch =
         `${rec.employee.first_name} ${rec.employee.last_name}`.toLowerCase().includes(searchQuery.toLowerCase()) ||
         rec.employee.employee_id.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        rec.employee.department_name?.toLowerCase().includes(searchQuery.toLowerCase());
+        (rec.employee.department_name && rec.employee.department_name.toLowerCase().includes(searchQuery.toLowerCase()));
       const matchBranch = selectedBranch === 'All' || rec.employee.branch_name === selectedBranch;
       return matchSearch && matchBranch;
     });
-  }, [payrollRecords, searchQuery, selectedBranch]);
+  }, [computedPayrollRecords, searchQuery, selectedBranch]);
 
   // Aggregate Metrics
   const totalGrossDisbursement = useMemo(() => {
-    return payrollRecords.reduce((sum, r) => sum + r.grossSalary, 0);
-  }, [payrollRecords]);
+    return computedPayrollRecords.reduce((sum, r) => sum + r.gross_salary, 0);
+  }, [computedPayrollRecords]);
 
   const totalNetDisbursement = useMemo(() => {
-    return payrollRecords.reduce((sum, r) => sum + r.netPayable, 0);
-  }, [payrollRecords]);
+    return computedPayrollRecords.reduce((sum, r) => sum + r.net_payable, 0);
+  }, [computedPayrollRecords]);
 
   const totalStatutoryTaxes = useMemo(() => {
-    return payrollRecords.reduce((sum, r) => sum + r.pfDeduction + r.professionalTax + r.tdsTax, 0);
-  }, [payrollRecords]);
+    return computedPayrollRecords.reduce((sum, r) => sum + r.pf_deduction + r.professional_tax + r.tds_tax, 0);
+  }, [computedPayrollRecords]);
 
-  const handleProcessBatchPayroll = () => {
+  const handleProcessBatchPayroll = async () => {
     setIsProcessing(true);
-    setTimeout(() => {
+    try {
+      await disbursePayroll(selectedMonth, computedPayrollRecords);
+      setProcessedSuccess(`Successfully computed and released payroll for ${computedPayrollRecords.length} employees for ${selectedMonth}. All employees have been notified.`);
+      setTimeout(() => setProcessedSuccess(null), 5000);
+    } finally {
       setIsProcessing(false);
-      setProcessedSuccess(`Successfully computed and released payroll for ${payrollRecords.length} employees for ${selectedMonth}.`);
-      setTimeout(() => setProcessedSuccess(null), 4000);
-    }, 1000);
+    }
+  };
+
+  const handleReleaseSingleRecord = async (record: PayrollRecord & { employee: Employee }) => {
+    await releaseEmployeePayslip(record);
+    setProcessedSuccess(`Released and notified ${record.employee.first_name} for ${record.month} (Net: ₹${record.net_payable.toLocaleString('en-IN')}).`);
+    setTimeout(() => setProcessedSuccess(null), 4000);
+  };
+
+  const handleOpenEditSalary = (emp: Employee) => {
+    setIsEditingSalaryEmp(emp);
+    setEditBaseSalary(emp.base_salary || 50000);
+    setEditBankAccount(emp.bank_account || `HDFC00049281${emp.id.slice(-4)}`);
+    setEditIfsc(emp.ifsc_code || 'HDFC0000240');
+  };
+
+  const handleSaveSalary = async () => {
+    if (!isEditingSalaryEmp) return;
+    await updateEmployee(isEditingSalaryEmp.id, {
+      base_salary: editBaseSalary,
+      bank_account: editBankAccount,
+      ifsc_code: editIfsc,
+    });
+    setIsEditingSalaryEmp(null);
+    setProcessedSuccess(`Updated salary structure for ${isEditingSalaryEmp.first_name} ${isEditingSalaryEmp.last_name}.`);
+    setTimeout(() => setProcessedSuccess(null), 4000);
   };
 
   const handleExportBankTransferCSV = () => {
-    const headers = 'Employee ID,Full Name,Bank Account,IFSC Code,Net Payable (INR),Payment Mode\n';
+    const headers = 'Employee ID,Full Name,Bank Account,IFSC Code,Net Payable (INR),Payment Mode,Payment Status\n';
     const rows = filteredRecords
       .map(
         (r) =>
-          `"${r.employee.employee_id}","${r.employee.first_name} ${r.employee.last_name}","HDFC00049281${Math.floor(1000 + Math.random() * 9000)}","HDFC0000240","${r.netPayable}","NEFT/DIRECT_DEPOSIT"`
+          `"${r.employee.employee_id}","${r.employee.first_name} ${r.employee.last_name}","${r.employee.bank_account || 'HDFC00049281' + r.employee.id.slice(-4)}","${r.employee.ifsc_code || 'HDFC0000240'}","${r.net_payable}","NEFT/DIRECT_DEPOSIT","${r.payment_status}"`
       )
       .join('\n');
     const blob = new Blob([headers + rows], { type: 'text/csv' });
@@ -162,10 +269,19 @@ export const HRPayrollManagement: React.FC = () => {
         <div>
           <div className="flex items-center gap-2">
             <h1 className="text-2xl font-black text-slate-900 tracking-tight">Workforce Payroll & Compensation</h1>
-            <Badge variant="blue">{selectedMonth}</Badge>
+            <select
+              value={selectedMonth}
+              onChange={(e) => setSelectedMonth(e.target.value)}
+              aria-label="Select Payroll Month"
+              className="px-3 py-1 bg-blue-50 border border-blue-200 text-blue-700 font-bold rounded-xl text-xs focus:outline-none cursor-pointer"
+            >
+              {availableMonths.map((m) => (
+                <option key={m} value={m}>{m}</option>
+              ))}
+            </select>
           </div>
           <p className="text-xs sm:text-sm text-slate-500 font-medium mt-0.5">
-            Automated statutory tax deduction, PF compliance, and instant bank disbursement ledger.
+            Automated statutory tax deduction, PF compliance, and instant bank disbursement ledger linked to live attendance.
           </p>
         </div>
 
@@ -188,7 +304,7 @@ export const HRPayrollManagement: React.FC = () => {
             loading={isProcessing}
             icon={<CheckCircle2 className="w-4 h-4" />}
             className="font-bold text-xs shadow-xs"
-            disabled={payrollRecords.length === 0}
+            disabled={computedPayrollRecords.length === 0}
           >
             Disburse {selectedMonth} Payroll
           </Button>
@@ -196,7 +312,7 @@ export const HRPayrollManagement: React.FC = () => {
       </div>
 
       {processedSuccess && (
-        <div className="p-4 bg-emerald-50 border border-emerald-200 text-emerald-900 text-xs font-bold rounded-2xl flex items-center gap-2.5">
+        <div className="p-4 bg-emerald-50 border border-emerald-200 text-emerald-900 text-xs font-bold rounded-2xl flex items-center gap-2.5 animate-fadeIn">
           <CheckCircle className="w-5 h-5 text-emerald-600 shrink-0" />
           <span>{processedSuccess}</span>
         </div>
@@ -227,7 +343,7 @@ export const HRPayrollManagement: React.FC = () => {
           <p className="text-xl sm:text-2xl font-black text-slate-900 mt-1">
             ₹{totalGrossDisbursement.toLocaleString('en-IN')}
           </p>
-          <span className="text-[10px] text-slate-500 font-medium">{payrollRecords.length} Staff on Roster</span>
+          <span className="text-[10px] text-slate-500 font-medium">{computedPayrollRecords.length} Staff on Roster</span>
         </Card>
 
         <Card padded={false} className="p-4 bg-white border-[#E8E2D9] rounded-2xl shadow-2xs">
@@ -250,8 +366,8 @@ export const HRPayrollManagement: React.FC = () => {
               <Calendar className="w-4 h-4" />
             </div>
           </div>
-          <p className="text-xl sm:text-2xl font-black text-slate-900 mt-1">31st Aug</p>
-          <span className="text-[10px] text-amber-700 font-bold">Standard 25th-31st Cutoff</span>
+          <p className="text-xl sm:text-2xl font-black text-slate-900 mt-1">{selectedMonth}</p>
+          <span className="text-[10px] text-amber-700 font-bold">End-of-Month Settlement</span>
         </Card>
       </div>
 
@@ -272,6 +388,7 @@ export const HRPayrollManagement: React.FC = () => {
           <select
             value={selectedBranch}
             onChange={(e) => setSelectedBranch(e.target.value)}
+            aria-label="Filter by Regional Hub"
             className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-700 focus:outline-none"
           >
             <option value="All">All Regional Hubs</option>
@@ -294,7 +411,7 @@ export const HRPayrollManagement: React.FC = () => {
           </div>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse min-w-[850px]">
+            <table className="w-full text-left border-collapse min-w-[950px]">
               <thead>
                 <tr className="bg-slate-50 border-b border-slate-200 text-[11px] font-bold text-slate-500 uppercase">
                   <th className="py-3.5 px-4">Employee</th>
@@ -304,7 +421,7 @@ export const HRPayrollManagement: React.FC = () => {
                   <th className="py-3.5 px-3 text-right">TDS / Deductions</th>
                   <th className="py-3.5 px-4 text-right">Net Payable</th>
                   <th className="py-3.5 px-3 text-center">Status</th>
-                  <th className="py-3.5 px-4 text-right">Action</th>
+                  <th className="py-3.5 px-4 text-right">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 text-xs">
@@ -322,7 +439,7 @@ export const HRPayrollManagement: React.FC = () => {
                             {rec.employee.first_name} {rec.employee.last_name}
                           </p>
                           <span className="text-[10px] text-slate-400 font-mono">
-                            {rec.employee.employee_id} • {rec.employee.department_name}
+                            {rec.employee.employee_id} • {rec.employee.department_name || 'Engineering'}
                           </span>
                         </div>
                       </div>
@@ -330,42 +447,67 @@ export const HRPayrollManagement: React.FC = () => {
 
                     <td className="py-3 px-3 text-center">
                       <span className="inline-block px-2 py-0.5 bg-slate-100 rounded-lg font-mono font-bold text-[11px] text-slate-700">
-                        {rec.daysPresent}/{rec.totalWorkingDays} Days
+                        {rec.days_present}/{rec.total_working_days} Days
                       </span>
                     </td>
 
                     <td className="py-3 px-3 text-right font-mono font-bold text-slate-800">
-                      ₹{rec.grossSalary.toLocaleString('en-IN')}
+                      ₹{rec.gross_salary.toLocaleString('en-IN')}
                     </td>
 
                     <td className="py-3 px-3 text-right font-mono text-purple-700 font-medium">
-                      -₹{rec.pfDeduction.toLocaleString('en-IN')}
+                      -₹{rec.pf_deduction.toLocaleString('en-IN')}
                     </td>
 
                     <td className="py-3 px-3 text-right font-mono text-rose-600 font-medium">
-                      -₹{(rec.tdsTax + rec.professionalTax + rec.leaveDeductions).toLocaleString('en-IN')}
+                      -₹{(rec.tds_tax + rec.professional_tax + rec.leave_deductions + (rec.medical_insurance || 0)).toLocaleString('en-IN')}
                     </td>
 
                     <td className="py-3 px-4 text-right font-mono font-black text-emerald-700 text-sm">
-                      ₹{rec.netPayable.toLocaleString('en-IN')}
+                      ₹{rec.net_payable.toLocaleString('en-IN')}
                     </td>
 
                     <td className="py-3 px-3 text-center">
-                      <Badge variant="green" size="sm">
-                        {rec.status}
+                      <Badge variant={rec.payment_status === 'Paid' ? 'green' : 'blue'} size="sm">
+                        {rec.payment_status}
                       </Badge>
                     </td>
 
                     <td className="py-3 px-4 text-right">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => setSelectedPayroll(rec)}
-                        icon={<Eye className="w-3.5 h-3.5" />}
-                        className="text-xs font-bold"
-                      >
-                        Payslip
-                      </Button>
+                      <div className="flex items-center justify-end gap-1.5">
+                        <button
+                          onClick={() => handleOpenEditSalary(rec.employee)}
+                          className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-all"
+                          title="Edit Salary Structure"
+                        >
+                          <Edit2 className="w-3.5 h-3.5" />
+                        </button>
+                        
+                        {rec.payment_status !== 'Paid' && (
+                          <Button
+                            variant="primary"
+                            size="sm"
+                            onClick={() => handleReleaseSingleRecord(rec)}
+                            icon={<Send className="w-3 h-3" />}
+                            className="text-[11px] font-bold py-1 px-2.5"
+                          >
+                            Release
+                          </Button>
+                        )}
+
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => {
+                            setSelectedEmployeeForPayslip(rec.employee);
+                            setSelectedPayrollRecord(rec);
+                          }}
+                          icon={<Eye className="w-3.5 h-3.5" />}
+                          className="text-[11px] font-bold py-1 px-2.5"
+                        >
+                          Payslip
+                        </Button>
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -375,112 +517,97 @@ export const HRPayrollManagement: React.FC = () => {
         )}
       </div>
 
-      {/* ─── MODAL: DETAILED PAYSLIP BREAKDOWN ──────────────────────── */}
-      <Modal
-        isOpen={!!selectedPayroll}
-        onClose={() => setSelectedPayroll(null)}
-        title={`Payslip Breakdown • ${selectedPayroll?.employee.first_name} ${selectedPayroll?.employee.last_name}`}
-      >
-        {selectedPayroll && (
+      {/* ─── MODAL: OFFICIAL PAYSLIP PREVIEW ───────────────────────── */}
+      {selectedEmployeeForPayslip && selectedPayrollRecord && (
+        <PayslipModal
+          isOpen={true}
+          onClose={() => {
+            setSelectedEmployeeForPayslip(null);
+            setSelectedPayrollRecord(null);
+          }}
+          employee={selectedEmployeeForPayslip}
+          month={selectedPayrollRecord.month}
+          payrollData={{
+            baseSalary: selectedPayrollRecord.base_salary,
+            hra: selectedPayrollRecord.hra,
+            specialAllowance: selectedPayrollRecord.special_allowance,
+            conveyance: selectedPayrollRecord.conveyance,
+            overtimeEarnings: selectedPayrollRecord.overtime_earnings,
+            pfDeduction: selectedPayrollRecord.pf_deduction,
+            professionalTax: selectedPayrollRecord.professional_tax,
+            tdsTax: selectedPayrollRecord.tds_tax,
+            leaveDeductions: selectedPayrollRecord.leave_deductions,
+            totalDeductions: selectedPayrollRecord.total_deductions,
+            grossSalary: selectedPayrollRecord.gross_salary,
+            netPayable: selectedPayrollRecord.net_payable,
+            daysPresent: selectedPayrollRecord.days_present,
+            totalWorkingDays: selectedPayrollRecord.total_working_days,
+          }}
+        />
+      )}
+
+      {/* ─── MODAL: EDIT SALARY STRUCTURE ──────────────────────────── */}
+      {isEditingSalaryEmp && (
+        <Modal
+          isOpen={true}
+          onClose={() => setIsEditingSalaryEmp(null)}
+          title={`Edit Salary Structure • ${isEditingSalaryEmp.first_name} ${isEditingSalaryEmp.last_name}`}
+        >
           <div className="space-y-4 text-left">
-            <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200 flex items-center justify-between">
+            <div className="p-3.5 bg-slate-50 rounded-2xl border border-slate-200 flex items-center justify-between text-xs">
               <div>
-                <p className="font-extrabold text-sm text-slate-900">
-                  {selectedPayroll.employee.first_name} {selectedPayroll.employee.last_name}
-                </p>
-                <span className="text-xs text-slate-500 font-mono">
-                  {selectedPayroll.employee.employee_id} • {selectedPayroll.employee.designation}
-                </span>
+                <p className="font-bold text-slate-900">{isEditingSalaryEmp.first_name} {isEditingSalaryEmp.last_name}</p>
+                <span className="text-slate-500 font-mono">{isEditingSalaryEmp.employee_id} • {isEditingSalaryEmp.designation}</span>
               </div>
-              <Badge variant="blue">{selectedMonth}</Badge>
+              <Badge variant="blue">{isEditingSalaryEmp.department_name || 'Operations'}</Badge>
             </div>
 
-            {/* Earnings & Deductions Split */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              {/* Earnings */}
-              <div className="p-4 bg-emerald-50/50 rounded-2xl border border-emerald-100 space-y-2 text-xs">
-                <h4 className="font-bold text-emerald-900 uppercase tracking-wider text-[10px]">Earnings (Credits)</h4>
-                <div className="space-y-1.5 font-mono">
-                  <div className="flex justify-between">
-                    <span className="text-slate-600">Basic Pay:</span>
-                    <span className="font-bold text-slate-800">₹{selectedPayroll.baseSalary.toLocaleString('en-IN')}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-slate-600">House Rent Allowance (HRA):</span>
-                    <span className="font-bold text-slate-800">₹{selectedPayroll.hra.toLocaleString('en-IN')}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-slate-600">Special Allowance:</span>
-                    <span className="font-bold text-slate-800">₹{selectedPayroll.specialAllowance.toLocaleString('en-IN')}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-slate-600">Conveyance Allowance:</span>
-                    <span className="font-bold text-slate-800">₹{selectedPayroll.conveyance.toLocaleString('en-IN')}</span>
-                  </div>
-                  {selectedPayroll.overtimeEarnings > 0 && (
-                    <div className="flex justify-between text-blue-700">
-                      <span>Overtime Incentive:</span>
-                      <span className="font-bold">₹{selectedPayroll.overtimeEarnings.toLocaleString('en-IN')}</span>
-                    </div>
-                  )}
-                  <div className="pt-2 border-t border-emerald-200 flex justify-between font-extrabold text-slate-900">
-                    <span>Total Gross Earnings:</span>
-                    <span>₹{selectedPayroll.grossSalary.toLocaleString('en-IN')}</span>
-                  </div>
-                </div>
+            <div className="space-y-3 text-xs">
+              <div>
+                <label className="font-bold text-slate-700 block mb-1">Monthly Base Salary (₹)</label>
+                <input
+                  type="number"
+                  value={editBaseSalary}
+                  onChange={(e) => setEditBaseSalary(Number(e.target.value))}
+                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl font-mono font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-veyra-blue"
+                />
+                <p className="text-[10px] text-slate-400 mt-1">HRA (40%), Special Allowance (20%), and PF (12%) will automatically adjust.</p>
               </div>
 
-              {/* Deductions */}
-              <div className="p-4 bg-rose-50/50 rounded-2xl border border-rose-100 space-y-2 text-xs">
-                <h4 className="font-bold text-rose-900 uppercase tracking-wider text-[10px]">Deductions (Debits)</h4>
-                <div className="space-y-1.5 font-mono">
-                  <div className="flex justify-between">
-                    <span className="text-slate-600">Provident Fund (PF):</span>
-                    <span className="font-bold text-rose-700">-₹{selectedPayroll.pfDeduction.toLocaleString('en-IN')}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-slate-600">Professional Tax (PT):</span>
-                    <span className="font-bold text-rose-700">-₹{selectedPayroll.professionalTax.toLocaleString('en-IN')}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-slate-600">Income Tax (TDS):</span>
-                    <span className="font-bold text-rose-700">-₹{selectedPayroll.tdsTax.toLocaleString('en-IN')}</span>
-                  </div>
-                  {selectedPayroll.leaveDeductions > 0 && (
-                    <div className="flex justify-between text-rose-800">
-                      <span>Unpaid Absence:</span>
-                      <span className="font-bold">-₹{selectedPayroll.leaveDeductions.toLocaleString('en-IN')}</span>
-                    </div>
-                  )}
-                  <div className="pt-2 border-t border-rose-200 flex justify-between font-extrabold text-rose-900">
-                    <span>Total Deductions:</span>
-                    <span>-₹{selectedPayroll.totalDeductions.toLocaleString('en-IN')}</span>
-                  </div>
-                </div>
+              <div>
+                <label className="font-bold text-slate-700 block mb-1">Bank Account Number</label>
+                <input
+                  type="text"
+                  value={editBankAccount}
+                  onChange={(e) => setEditBankAccount(e.target.value)}
+                  placeholder="e.g. 50100492817291"
+                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl font-mono text-slate-900 focus:outline-none focus:ring-2 focus:ring-veyra-blue"
+                />
+              </div>
+
+              <div>
+                <label className="font-bold text-slate-700 block mb-1">Bank IFSC Code</label>
+                <input
+                  type="text"
+                  value={editIfsc}
+                  onChange={(e) => setEditIfsc(e.target.value)}
+                  placeholder="e.g. HDFC0000240"
+                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl font-mono uppercase text-slate-900 focus:outline-none focus:ring-2 focus:ring-veyra-blue"
+                />
               </div>
             </div>
 
-            {/* Net Amount Box */}
-            <div className="p-4 bg-slate-900 text-white rounded-2xl flex items-center justify-between">
-              <div>
-                <span className="text-xs text-slate-400 font-mono">NET DISBURSEMENT AMOUNT</span>
-                <p className="text-xl font-black text-emerald-400 font-mono">
-                  ₹{selectedPayroll.netPayable.toLocaleString('en-IN')}
-                </p>
-              </div>
-              <Button
-                variant="primary"
-                size="sm"
-                onClick={() => window.print()}
-                icon={<Printer className="w-4 h-4" />}
-                className="font-bold text-xs"
-              >
-                Print Slip
+            <div className="flex justify-end gap-2 pt-3 border-t border-slate-100">
+              <Button variant="outline" size="sm" onClick={() => setIsEditingSalaryEmp(null)}>
+                Cancel
+              </Button>
+              <Button variant="primary" size="sm" onClick={handleSaveSalary} icon={<CheckCircle2 className="w-4 h-4" />}>
+                Save Changes
               </Button>
             </div>
           </div>
-        )}
-      </Modal>
+        </Modal>
+      )}
     </div>
   );
 };
