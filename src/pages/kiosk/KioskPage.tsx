@@ -77,6 +77,10 @@ export const KioskPage: React.FC = () => {
     time: string;
   } | null>(null);
 
+  const [isPinModalOpen, setIsPinModalOpen] = useState(false);
+  const [touchPinInput, setTouchPinInput] = useState('');
+  const [pinError, setPinError] = useState<string | null>(null);
+
   const kioskVideoRef = useRef<HTMLVideoElement | null>(null);
   const kioskStreamRef = useRef<MediaStream | null>(null);
   const kioskCanvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -185,20 +189,119 @@ export const KioskPage: React.FC = () => {
     } catch {}
   };
 
-  // ─── KIOSK QR PROCESSOR: Only accepts valid VEYRA-QR-AUTH:branchId:... tokens ───
+  // ─── OFFLINE PUNCH QUEUE & SYNC ENGINE ─────────────────────────────────
+  const [offlineQueue, setOfflineQueue] = useState<any[]>(() => {
+    try {
+      const saved = localStorage.getItem('veyra_kiosk_offline_queue');
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  });
+
+  const [isOnline, setIsOnline] = useState(navigator.onLine);
+
+  useEffect(() => {
+    const handleOnline = async () => {
+      setIsOnline(true);
+      const savedQueueRaw = localStorage.getItem('veyra_kiosk_offline_queue');
+      if (savedQueueRaw) {
+        try {
+          const queue = JSON.parse(savedQueueRaw);
+          if (Array.isArray(queue) && queue.length > 0) {
+            for (const item of queue) {
+              if (item.action === 'check_in') {
+                await checkIn(item.employee_id, item.location, 'QR Kiosk (Offline Synced)');
+              } else {
+                await checkOut(item.employee_id, item.location);
+              }
+            }
+            localStorage.removeItem('veyra_kiosk_offline_queue');
+            setOfflineQueue([]);
+            playSuccessChime();
+          }
+        } catch (e) {
+          console.warn('Kiosk offline sync:', e);
+        }
+      }
+    };
+
+    const handleOffline = () => setIsOnline(false);
+
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, [checkIn, checkOut]);
+
+  // Screen Wake-Lock to keep tablet screen awake 24/7 at office gate
+  useEffect(() => {
+    let wakeLock: any = null;
+    const requestWakeLock = async () => {
+      if ('wakeLock' in navigator) {
+        try {
+          wakeLock = await (navigator as any).wakeLock.request('screen');
+        } catch {}
+      }
+    };
+
+    requestWakeLock();
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        requestWakeLock();
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      if (wakeLock) {
+        wakeLock.release().catch(() => {});
+      }
+    };
+  }, []);
+
+  // ─── KIOSK SMART DECODER: Handles ID Badges, Rolling QRs, and Employee IDs ───
   const processDecodedString = async (rawCode: string) => {
     if (isCooldownRef.current) return;
     isCooldownRef.current = true;
 
     const clean = rawCode.trim();
+    let targetEmployeeId = '';
+    let tokenBranchId = '';
 
-    // STRICT VALIDATION: Only process VeyraHR attendance tokens
-    // Format: VEYRA-QR-AUTH:<branchId>:<branchName>:<timestamp>:<randomSuffix>
-    if (!clean.startsWith('VEYRA-QR-AUTH:')) {
+    // 1. JSON Format (Digital ID Badge / App Pass)
+    if (clean.startsWith('{') && clean.endsWith('}')) {
+      try {
+        const parsed = JSON.parse(clean);
+        targetEmployeeId = parsed.id || parsed.employee_id || parsed.employeeId || parsed.email || '';
+        if (parsed.branch) tokenBranchId = parsed.branch;
+      } catch {}
+    } 
+    // 2. Standard Rolling Veyra Token (VEYRA-QR-AUTH:<branchId>:<name>:<time>:<rand>:<empId>)
+    else if (clean.startsWith('VEYRA-QR-AUTH:')) {
+      const parts = clean.split(':');
+      tokenBranchId = parts[1] || '';
+      targetEmployeeId = parts[5] || '';
+    } 
+    // 3. Employee Digital Pass Prefix (VEYRA-EMP-PASS:<id>:<emp_id>)
+    else if (clean.startsWith('VEYRA-EMP-PASS:')) {
+      const parts = clean.split(':');
+      targetEmployeeId = parts[1] || parts[2] || '';
+    } 
+    // 4. Direct Employee ID or Code
+    else if (clean.startsWith('VEY-EMP-') || clean.startsWith('emp_') || clean.length >= 3) {
+      targetEmployeeId = clean;
+    }
+
+    if (!targetEmployeeId) {
       playErrorChime();
       setKioskScanError({
-        message: 'Invalid QR Code — Only VeyraHR attendance tokens are accepted.',
-        payload: clean.length > 40 ? clean.substring(0, 40) + '...' : clean,
+        message: 'Unrecognized Badge QR — Please present your VeyraHR ID card.',
+        payload: clean.length > 30 ? clean.substring(0, 30) + '...' : clean,
       });
       setTimeout(() => {
         setKioskScanError(null);
@@ -207,47 +310,21 @@ export const KioskPage: React.FC = () => {
       return;
     }
 
-    // Parse: VEYRA-QR-AUTH:<branchId>:<branchName>:<timestamp>:<suffix>:<employeeId>
-    const parts = clean.split(':');
-    // parts[0] = VEYRA-QR-AUTH
-    // parts[1] = branchId  (e.g. "b1")
-    // parts[2] = branchName
-    // parts[3] = timestamp
-    // parts[4] = random suffix
-    // parts[5] = employeeId (optional — set by employee mobile app)
-    const tokenBranchId = parts[1] || '';
-    const tokenEmployeeId = parts[5] || '';
-    const tokenTimestamp = parseInt(parts[3] || '0', 10);
-
-    // Validate token freshness (max 35 seconds old)
-    const ageMs = Date.now() - tokenTimestamp;
-    if (tokenTimestamp > 0 && ageMs > 35000) {
-      playErrorChime();
-      setKioskScanError({
-        message: 'Expired QR Token — Please refresh the QR code on your device.',
-        payload: `Token age: ${Math.floor(ageMs / 1000)}s`,
-      });
-      setTimeout(() => {
-        setKioskScanError(null);
-        isCooldownRef.current = false;
-      }, 3000);
-      return;
-    }
-
-    // Find the employee by the ID embedded in the QR token
-    let matchedEmp: Employee | undefined;
-    if (tokenEmployeeId) {
-      matchedEmp = employees.find(
-        (e) => e.id === tokenEmployeeId ||
-               (e.employee_id && e.employee_id.toLowerCase() === tokenEmployeeId.toLowerCase())
-      );
-    }
+    // Match employee against active staff directory
+    const cleanLookup = targetEmployeeId.toLowerCase();
+    const matchedEmp = employees.find(
+      (e) =>
+        e.id.toLowerCase() === cleanLookup ||
+        (e.employee_id && e.employee_id.toLowerCase() === cleanLookup) ||
+        (e.email && e.email.toLowerCase() === cleanLookup) ||
+        `${e.first_name} ${e.last_name}`.toLowerCase() === cleanLookup
+    );
 
     if (!matchedEmp) {
       playErrorChime();
       setKioskScanError({
-        message: 'Employee not found. Please contact HR.',
-        payload: tokenEmployeeId || 'No employee ID in token',
+        message: 'Employee Not Recognized. Please contact HR.',
+        payload: targetEmployeeId,
       });
       setTimeout(() => {
         setKioskScanError(null);
@@ -259,46 +336,72 @@ export const KioskPage: React.FC = () => {
     setKioskScanError(null);
     playSuccessChime();
 
-    // Check if employee is already checked in today -> Toggle to Check Out
+    // Check if employee is currently checked in today -> Toggle to Check Out
     const isCurrentlyCheckedIn = checkedInSet.has(matchedEmp.id);
     let actionText: 'Checked In (Present)' | 'Checked Out' = 'Checked In (Present)';
 
-    const branchForRecord = tokenBranchId
-      ? (branches.find((b) => b.id === tokenBranchId)?.name || activeBranch.name)
-      : activeBranch.name;
+    const branchForRecord = activeBranch.name;
 
     if (isCurrentlyCheckedIn) {
       setCheckedInSet((prev) => {
         const next = new Set(prev);
-        next.delete(matchedEmp!.id);
+        next.delete(matchedEmp.id);
         return next;
       });
-      await checkOut(matchedEmp.id, branchForRecord);
+
+      if (navigator.onLine) {
+        await checkOut(matchedEmp.id, branchForRecord);
+      } else {
+        const offlineItem = {
+          action: 'check_out',
+          employee_id: matchedEmp.id,
+          location: branchForRecord,
+          timestamp: new Date().toISOString(),
+        };
+        const updated = [...offlineQueue, offlineItem];
+        setOfflineQueue(updated);
+        localStorage.setItem('veyra_kiosk_offline_queue', JSON.stringify(updated));
+      }
       actionText = 'Checked Out';
     } else {
       setCheckedInSet((prev) => {
         const next = new Set(prev);
-        next.add(matchedEmp!.id);
+        next.add(matchedEmp.id);
         return next;
       });
-      await checkIn(matchedEmp.id, branchForRecord, 'QR Kiosk Scanner');
+
+      if (navigator.onLine) {
+        await checkIn(matchedEmp.id, branchForRecord, 'Kiosk Optical Scanner');
+      } else {
+        const offlineItem = {
+          action: 'check_in',
+          employee_id: matchedEmp.id,
+          location: branchForRecord,
+          timestamp: new Date().toISOString(),
+        };
+        const updated = [...offlineQueue, offlineItem];
+        setOfflineQueue(updated);
+        localStorage.setItem('veyra_kiosk_offline_queue', JSON.stringify(updated));
+      }
       actionText = 'Checked In (Present)';
     }
 
     setVerifiedEmployee({
       name: `${matchedEmp.first_name} ${matchedEmp.last_name}`,
       avatar: matchedEmp.avatar_url || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150',
-      designation: matchedEmp.designation || 'Software Specialist',
+      designation: matchedEmp.designation || 'Specialist',
       action: actionText,
       time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
     });
 
-    // Voice announcement synthesizer for hands-free front-desk confirmation
+    // Voice announcement synthesizer for gate greeting
     if (soundEnabled && 'speechSynthesis' in window) {
       try {
         window.speechSynthesis.cancel();
-        const shortAction = actionText.includes('Checked In') ? 'Checked In' : 'Checked Out';
-        const utterance = new SpeechSynthesisUtterance(`${shortAction}. Welcome, ${matchedEmp.first_name}!`);
+        const greeting = actionText.includes('Checked In')
+          ? `Welcome to VeyraHR, ${matchedEmp.first_name}! Check-in recorded.`
+          : `Good evening ${matchedEmp.first_name}! Shift completed and check-out logged.`;
+        const utterance = new SpeechSynthesisUtterance(greeting);
         utterance.rate = 1.05;
         utterance.pitch = 1.0;
         window.speechSynthesis.speak(utterance);
@@ -308,7 +411,7 @@ export const KioskPage: React.FC = () => {
     setTimeout(() => {
       setVerifiedEmployee(null);
       isCooldownRef.current = false;
-    }, 3000);
+    }, 3500);
   };
 
   // Start continuous high-frequency optical camera stream for the Kiosk
@@ -755,31 +858,85 @@ export const KioskPage: React.FC = () => {
           </div>
         </div>
 
-        {/* Real-Time Presence Metrics Bar */}
-        <div className="w-full max-w-7xl grid grid-cols-2 gap-6 mt-4">
-          <div className="p-3.5 bg-slate-900/80 backdrop-blur-md rounded-2xl border border-slate-800 text-left flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-blue-500/20 text-blue-400 flex items-center justify-center border border-blue-500/30 shrink-0">
-              <Users className="w-5 h-5" />
-            </div>
-            <div>
-              <span className="text-[10px] font-bold text-slate-400 uppercase block">Today's Presence</span>
-              <span className="text-base font-extrabold text-white font-mono">
-                {branchPunches.length} Punches Logged
+        {/* Real-Time Presence Metrics & Ticker Bar */}
+        <div className="w-full max-w-7xl space-y-3 mt-4">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div className="p-3.5 bg-slate-900/80 backdrop-blur-md rounded-2xl border border-slate-800 text-left flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-blue-500/20 text-blue-400 flex items-center justify-center border border-blue-500/30 shrink-0">
+                  <Users className="w-5 h-5" />
+                </div>
+                <div>
+                  <span className="text-[10px] font-bold text-slate-400 uppercase block">Today's Presence</span>
+                  <span className="text-base font-extrabold text-white font-mono">
+                    {branchPunches.length} Punches Logged
+                  </span>
+                </div>
+              </div>
+              <span className="px-2.5 py-1 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 text-xs font-mono font-bold">
+                {checkedInSet.size} On-Duty
               </span>
             </div>
+
+            <div className="p-3.5 bg-slate-900/80 backdrop-blur-md rounded-2xl border border-slate-800 text-left flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-cyan-500/20 text-cyan-400 flex items-center justify-center border border-cyan-500/30 shrink-0">
+                  <MapPin className="w-5 h-5" />
+                </div>
+                <div>
+                  <span className="text-[10px] font-bold text-slate-400 uppercase block">Terminal Geofence</span>
+                  <span className="text-base font-extrabold text-cyan-400 font-mono">
+                    {(activeBranch as any).radius_meters || 150}m Boundary
+                  </span>
+                </div>
+              </div>
+              <span className="px-2.5 py-1 rounded-full bg-blue-500/10 text-blue-400 border border-blue-500/20 text-xs font-mono font-bold">
+                {activeBranch.city || 'Chennai'}
+              </span>
+            </div>
+
+            {/* Quick Touch PIN Check-In Action Button */}
+            <button
+              onClick={() => setIsPinModalOpen(true)}
+              className="p-3.5 bg-gradient-to-r from-blue-600/30 via-cyan-600/20 to-slate-900 rounded-2xl border border-cyan-500/40 hover:border-cyan-400 text-left flex items-center justify-between transition-all hover:scale-[1.01] active:scale-[0.99] group shadow-lg"
+            >
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-cyan-500 text-slate-950 flex items-center justify-center font-black text-sm shrink-0 shadow-md">
+                  123
+                </div>
+                <div>
+                  <span className="text-[10px] font-bold text-cyan-300 uppercase block">Method 3: Touch Screen</span>
+                  <span className="text-xs font-extrabold text-white group-hover:text-cyan-200">
+                    Quick PIN / Employee ID Pad
+                  </span>
+                </div>
+              </div>
+              <ArrowRight className="w-4 h-4 text-cyan-400 group-hover:translate-x-1 transition-transform" />
+            </button>
           </div>
 
-          <div className="p-3.5 bg-slate-900/80 backdrop-blur-md rounded-2xl border border-slate-800 text-left flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center border border-emerald-500/30 shrink-0">
-              <MapPin className="w-5 h-5" />
-            </div>
-            <div>
-              <span className="text-[10px] font-bold text-slate-400 uppercase block">Geofence Radius</span>
-              <span className="text-base font-extrabold text-emerald-400 font-mono">
-                {(activeBranch as any).radius_meters || 150}m Perimeter
+          {/* Live Recent Attendance Ticker */}
+          {branchPunches.length > 0 && (
+            <div className="bg-slate-950/70 border border-slate-800/80 rounded-2xl p-3 flex items-center gap-3 overflow-x-auto scrollbar-none">
+              <span className="text-[10px] font-black uppercase tracking-wider text-slate-400 shrink-0 font-mono px-2">
+                Live Gate Stream:
               </span>
+              <div className="flex items-center gap-2 shrink-0">
+                {branchPunches.slice(0, 8).map((p) => (
+                  <div
+                    key={p.id}
+                    className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-slate-900 border border-slate-800 text-xs shrink-0"
+                  >
+                    <div className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                    <span className="font-bold text-slate-200">{p.employee_name}</span>
+                    <span className="text-[10px] text-slate-400 font-mono">
+                      {p.check_in_time ? new Date(p.check_in_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Verified'}
+                    </span>
+                  </div>
+                ))}
+              </div>
             </div>
-          </div>
+          )}
         </div>
       </main>
 
@@ -890,6 +1047,102 @@ export const KioskPage: React.FC = () => {
             <p className="text-xs text-slate-400">
               Please present a valid VeyraHR Employee ID Card or Digital Mobile Pass.
             </p>
+          </div>
+        </div>
+      )}
+
+      {/* ─── TOUCH PIN / EMPLOYEE ID DIALPAD MODAL ────────────────────── */}
+      {isPinModalOpen && (
+        <div className="fixed inset-0 z-50 bg-slate-950/90 backdrop-blur-xl flex items-center justify-center p-4 animate-in fade-in duration-150">
+          <div className="w-full max-w-sm bg-slate-900 border border-slate-800 rounded-3xl p-6 shadow-2xl text-center space-y-4">
+            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+              <div className="flex items-center gap-2 text-left">
+                <div className="w-8 h-8 rounded-xl bg-cyan-500/20 text-cyan-400 flex items-center justify-center font-bold text-xs">
+                  🔢
+                </div>
+                <div>
+                  <h4 className="text-sm font-extrabold text-white">Manual Punch Pad</h4>
+                  <p className="text-[10px] text-slate-400 font-medium">Enter 4-Digit PIN or Employee Code</p>
+                </div>
+              </div>
+              <button
+                onClick={() => {
+                  setIsPinModalOpen(false);
+                  setTouchPinInput('');
+                  setPinError(null);
+                }}
+                className="w-7 h-7 rounded-xl bg-slate-800 text-slate-400 hover:text-white flex items-center justify-center text-xs"
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Display Input */}
+            <div className="p-3 bg-slate-950 rounded-2xl border border-slate-800">
+              <input
+                type="text"
+                value={touchPinInput}
+                onChange={(e) => setTouchPinInput(e.target.value)}
+                placeholder="Enter Code (e.g. VEY-EMP-0001)"
+                className="w-full bg-transparent text-center text-lg font-mono font-black text-cyan-300 tracking-widest focus:outline-none placeholder:text-slate-700"
+              />
+            </div>
+
+            {pinError && (
+              <p className="text-xs text-rose-400 font-bold bg-rose-500/10 p-2 rounded-xl border border-rose-500/20">
+                {pinError}
+              </p>
+            )}
+
+            {/* Numerical Grid Keypad */}
+            <div className="grid grid-cols-3 gap-2">
+              {['1', '2', '3', '4', '5', '6', '7', '8', '9'].map((digit) => (
+                <button
+                  key={digit}
+                  onClick={() => setTouchPinInput((prev) => prev + digit)}
+                  className="py-3 rounded-2xl bg-slate-800/80 hover:bg-slate-700 active:bg-cyan-600 text-white font-mono text-lg font-extrabold border border-slate-700/60 shadow-xs transition-all active:scale-95"
+                >
+                  {digit}
+                </button>
+              ))}
+              <button
+                onClick={() => setTouchPinInput('')}
+                className="py-3 rounded-2xl bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 font-bold text-xs border border-rose-500/30 active:scale-95 transition-all"
+              >
+                CLR
+              </button>
+              <button
+                onClick={() => setTouchPinInput((prev) => prev + '0')}
+                className="py-3 rounded-2xl bg-slate-800/80 hover:bg-slate-700 active:bg-cyan-600 text-white font-mono text-lg font-extrabold border border-slate-700/60 shadow-xs transition-all active:scale-95"
+              >
+                0
+              </button>
+              <button
+                onClick={() => setTouchPinInput((prev) => prev.slice(0, -1))}
+                className="py-3 rounded-2xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-xs border border-slate-700/60 active:scale-95 transition-all"
+              >
+                ⌫
+              </button>
+            </div>
+
+            <div className="pt-2">
+              <Button
+                variant="primary"
+                className="w-full py-3 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 font-extrabold text-white text-xs shadow-lg shadow-cyan-500/20"
+                onClick={async () => {
+                  if (!touchPinInput.trim()) {
+                    setPinError('Please enter your Employee Code or PIN');
+                    return;
+                  }
+                  setIsPinModalOpen(false);
+                  await processDecodedString(touchPinInput.trim());
+                  setTouchPinInput('');
+                  setPinError(null);
+                }}
+              >
+                Verify & Punch Attendance
+              </Button>
+            </div>
           </div>
         </div>
       )}
