@@ -113,30 +113,53 @@ export const HRDashboardLayout: React.FC = () => {
                     {hrNotifications.length === 0 ? (
                       <p className="text-xs text-slate-400 text-center py-6">No HR notifications yet.</p>
                     ) : (
-                      hrNotifications.slice(0, 10).map((n) => (
-                        <div
-                          key={n.id}
-                          onClick={() => {
-                            markNotificationRead(n.id);
-                            if (n.link_url) {
+                      hrNotifications.slice(0, 8).map((n) => {
+                        const resolveTarget = () => {
+                          const type = (n.type || '').toLowerCase();
+                          const url = n.link_url || '';
+                          if (type === 'leave' || url.includes('leave')) return '/hr/leave';
+                          if (type === 'attendance' || url.includes('attendance')) return '/hr/attendance';
+                          if (type === 'payroll' || url.includes('payroll') || url.includes('payslip')) return '/hr/payroll';
+                          if (type === 'shift' || url.includes('shift')) return '/hr/shifts';
+                          if (type === 'announcement' || url.includes('announcement')) return '/hr/announcements';
+                          return '/hr/dashboard';
+                        };
+
+                        return (
+                          <div
+                            key={n.id}
+                            onClick={() => {
+                              markNotificationRead(n.id);
                               setIsNotifsOpen(false);
-                              navigate(n.link_url);
-                            }
-                          }}
-                          className={`pt-2 p-2 rounded-xl text-xs cursor-pointer transition-colors ${
-                            !n.is_read ? 'bg-blue-50/50 hover:bg-blue-50' : 'hover:bg-slate-50 opacity-70'
-                          }`}
-                        >
-                          <div className="flex items-start justify-between gap-2">
-                            <span className="font-extrabold text-slate-900 text-xs block leading-tight">{n.title}</span>
-                            <span className="text-[9px] text-slate-400 font-mono shrink-0">
-                              {new Date(n.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                            </span>
+                              navigate(resolveTarget());
+                            }}
+                            className={`pt-2 p-2 rounded-xl text-xs cursor-pointer transition-colors ${
+                              !n.is_read ? 'bg-blue-50/50 hover:bg-blue-50' : 'hover:bg-slate-50 opacity-70'
+                            }`}
+                          >
+                            <div className="flex items-start justify-between gap-2">
+                              <span className="font-extrabold text-slate-900 text-xs block leading-tight">{n.title}</span>
+                              <span className="text-[9px] text-slate-400 font-mono shrink-0">
+                                {new Date(n.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                              </span>
+                            </div>
+                            <p className="text-[11px] text-slate-600 mt-1 line-clamp-2 leading-relaxed">{n.message}</p>
                           </div>
-                          <p className="text-[11px] text-slate-600 mt-1 line-clamp-2 leading-relaxed">{n.message}</p>
-                        </div>
-                      ))
+                        );
+                      })
                     )}
+                  </div>
+
+                  <div className="pt-2 border-t border-slate-100 text-center">
+                    <button
+                      onClick={() => {
+                        setIsNotifsOpen(false);
+                        navigate('/hr/notifications');
+                      }}
+                      className="text-xs font-bold text-blue-600 hover:text-blue-700 hover:underline"
+                    >
+                      View All HR Notifications →
+                    </button>
                   </div>
                 </div>
               )}

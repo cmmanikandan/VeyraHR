@@ -1108,6 +1108,26 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       return updated;
     });
 
+    // 1. Notify HR Operations Console
+    addNotification({
+      recipient_profile_id: 'hr',
+      recipient_role: 'hr_manager',
+      title: `⚡ Check-In Verified: ${empName}`,
+      message: `${empName} punched in via ${method} at ${location} (${isLate ? 'Late Entry' : 'On-Time'}).`,
+      type: 'Attendance',
+      link_url: '/hr/attendance',
+    });
+
+    // 2. Notify Admin System Governance
+    addNotification({
+      recipient_profile_id: 'admin',
+      recipient_role: 'admin',
+      title: `📍 Attendance Punch: ${empName}`,
+      message: `${empName} logged check-in at ${location} (${method}).`,
+      type: 'Attendance',
+      link_url: '/admin/audit-logs',
+    });
+
     return newRecord;
   };
 
@@ -1185,6 +1205,26 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     } catch (e) {
       console.warn('Check-out sync:', e);
     }
+
+    // 1. Notify HR Operations Console
+    addNotification({
+      recipient_profile_id: 'hr',
+      recipient_role: 'hr_manager',
+      title: `⏱️ Check-Out Logged: ${empName}`,
+      message: `${empName} completed shift checkout from ${location}. Working time recorded.`,
+      type: 'Attendance',
+      link_url: '/hr/attendance',
+    });
+
+    // 2. Notify Admin System Governance
+    addNotification({
+      recipient_profile_id: 'admin',
+      recipient_role: 'admin',
+      title: `🚪 Shift Checkout: ${empName}`,
+      message: `${empName} checked out at ${location}.`,
+      type: 'Attendance',
+      link_url: '/admin/audit-logs',
+    });
 
     return updatedRecord!;
   };
@@ -1279,7 +1319,17 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       title: `📝 New Leave Application: ${newReq.employee_name || 'Staff Member'}`,
       message: `${newReq.employee_name || 'An employee'} applied for ${newReq.total_days}d of ${newReq.leave_type_name} (${newReq.start_date} to ${newReq.end_date}). Reason: ${newReq.reason || 'Personal'}`,
       type: 'Leave',
-      link_url: '/hr/leaves',
+      link_url: '/hr/leave',
+    });
+
+    // 4. Dispatch targeted notification to System Admin
+    addNotification({
+      recipient_profile_id: 'admin',
+      recipient_role: 'admin',
+      title: `📝 Leave Application Logged: ${newReq.employee_name || 'Staff'}`,
+      message: `${newReq.employee_name || 'Staff'} requested ${newReq.total_days} day(s) ${newReq.leave_type_name}.`,
+      type: 'Leave',
+      link_url: '/admin/audit-logs',
     });
 
     return newReq;
@@ -1314,6 +1364,16 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       type: 'Leave',
       link_url: '/employee/leave',
     });
+
+    // 4. Dispatch notification to Admin
+    addNotification({
+      recipient_profile_id: 'admin',
+      recipient_role: 'admin',
+      title: `📋 Leave Status Updated: ${status}`,
+      message: `Leave request for ${targetReq?.employee_name || 'employee'} was marked as ${status}.`,
+      type: 'Leave',
+      link_url: '/admin/audit-logs',
+    });
   };
 
   const submitCorrection = async (correction: Omit<AttendanceCorrection, 'id' | 'status' | 'created_at'>) => {
@@ -1334,10 +1394,20 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     addNotification({
       recipient_profile_id: 'hr',
       recipient_role: 'hr_manager',
-      title: '⏰ New Attendance Correction Submitted',
+      title: '⏰ Attendance Correction Submitted',
       message: `Correction request submitted for date ${newCorr.attendance_date}. Reason: ${newCorr.reason || 'Punch adjustment'}`,
       type: 'Attendance',
       link_url: '/hr/attendance',
+    });
+
+    // Dispatch targeted notification to System Admin
+    addNotification({
+      recipient_profile_id: 'admin',
+      recipient_role: 'admin',
+      title: '⏰ Attendance Correction Request',
+      message: `Punch correction filed for ${newCorr.attendance_date} by ${newCorr.employee_name || 'Staff'}.`,
+      type: 'Attendance',
+      link_url: '/admin/audit-logs',
     });
   };
 

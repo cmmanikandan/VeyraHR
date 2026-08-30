@@ -14,9 +14,11 @@ import {
   ChevronRight,
   X,
   CreditCard,
-  FileText
+  FileText,
+  Bell
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
+import { useData } from '../../context/DataContext';
 import { VeyraBrandHeader } from '../common/VeyraBrandHeader';
 
 interface AdminSidebarProps {
@@ -33,6 +35,7 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
   onCloseMobile,
 }) => {
   const { profile, logout } = useAuth();
+  const { notifications } = useData();
   const navigate = useNavigate();
 
   const handleSignOut = async () => {
@@ -40,8 +43,13 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
     navigate('/', { replace: true });
   };
 
+  const unreadAdminNotifs = notifications.filter(
+    (n) => !n.is_read && (n.recipient_role === 'admin' || n.recipient_role === 'all' || n.recipient_profile_id === 'admin' || n.recipient_profile_id === 'all')
+  ).length;
+
   const navItems = [
     { label: 'Dashboard', path: '/admin/dashboard', icon: LayoutDashboard },
+    { label: 'Notifications & Alerts', path: '/admin/notifications', icon: Bell, badge: unreadAdminNotifs },
     { label: 'Organization', path: '/admin/organization', icon: Building2 },
     { label: 'HR Managers', path: '/admin/hr-managers', icon: Users },
     { label: 'Manage Employees', path: '/admin/employees', icon: Users },
@@ -95,15 +103,22 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
                 to={item.path}
                 onClick={onCloseMobile}
                 className={({ isActive }) =>
-                  `flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-bold transition-all ${
+                  `flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs font-bold transition-all ${
                     isActive
                       ? 'bg-veyra-blue text-white shadow-xs'
                       : 'text-veyra-text-sub hover:text-veyra-text hover:bg-white'
                   }`
                 }
               >
-                <Icon className="w-4 h-4 shrink-0" />
-                {(!isCollapsed || mobileOpen) && <span className="truncate">{item.label}</span>}
+                <div className="flex items-center gap-3 min-w-0">
+                  <Icon className="w-4 h-4 shrink-0" />
+                  {(!isCollapsed || mobileOpen) && <span className="truncate">{item.label}</span>}
+                </div>
+                {item.badge !== undefined && item.badge > 0 && (!isCollapsed || mobileOpen) && (
+                  <span className="px-1.5 py-0.5 rounded-full bg-cyan-600 text-white text-[10px] font-mono font-bold shrink-0">
+                    {item.badge}
+                  </span>
+                )}
               </NavLink>
             );
           })}

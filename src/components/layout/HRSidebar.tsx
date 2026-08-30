@@ -16,7 +16,8 @@ import {
   X,
   ChevronRight as ArrowRight,
   Briefcase,
-  QrCode
+  QrCode,
+  Bell
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useData } from '../../context/DataContext';
@@ -36,7 +37,7 @@ export const HRSidebar: React.FC<HRSidebarProps> = ({
   onCloseMobile,
 }) => {
   const { profile, logout } = useAuth();
-  const { leaveRequests, shiftSwaps, corrections } = useData();
+  const { leaveRequests, shiftSwaps, corrections, notifications } = useData();
   const navigate = useNavigate();
 
   const handleSignOut = async () => {
@@ -48,9 +49,13 @@ export const HRSidebar: React.FC<HRSidebarProps> = ({
   const pendingLeaves = leaveRequests.filter((r) => r.status === 'Pending').length;
   const pendingSwaps = shiftSwaps.filter((s) => s.hr_approval === 'Pending').length;
   const pendingCorrections = corrections.filter((c) => c.status === 'Pending').length;
+  const unreadHrNotifs = notifications.filter(
+    (n) => !n.is_read && (n.recipient_role === 'hr_manager' || n.recipient_role === 'all' || n.recipient_profile_id === 'hr' || n.recipient_profile_id === 'all')
+  ).length;
 
   const navItems = [
     { label: 'Dashboard Overview', path: '/hr/dashboard', icon: LayoutDashboard },
+    { label: 'Notifications & Alerts', path: '/hr/notifications', icon: Bell, badge: unreadHrNotifs },
     { label: 'Employee Directory', path: '/hr/employees', icon: Users },
     { label: 'Document Repository', path: '/hr/documents', icon: FileSpreadsheet },
     { label: 'Payroll & Compensation', path: '/hr/payroll', icon: Briefcase },

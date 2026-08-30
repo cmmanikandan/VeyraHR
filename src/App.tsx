@@ -16,6 +16,7 @@ import { AdminBranchesPage } from './pages/admin/AdminBranchesPage';
 import { AdminAuditLogsPage } from './pages/admin/AdminAuditLogsPage';
 import { AdminHolidaysPage } from './pages/admin/AdminHolidaysPage';
 import { AdminCompanySettingsPage } from './pages/admin/AdminCompanySettingsPage';
+import { AdminNotificationsPage } from './pages/admin/AdminNotificationsPage';
 
 // HR Layout & Pages
 import { HRDashboardLayout } from './components/layout/HRDashboardLayout';
@@ -32,6 +33,7 @@ import { HRKioskManagement } from './pages/hr/HRKioskManagement';
 import { HRDepartmentsRoles } from './pages/hr/HRDepartmentsRoles';
 import { HRDocumentsPage } from './pages/hr/HRDocumentsPage';
 import { HRPayrollManagement } from './pages/hr/HRPayrollManagement';
+import { HRNotificationsPage } from './pages/hr/HRNotificationsPage';
 
 import { EmployeeLayout } from './components/layout/EmployeeLayout';
 import { EmployeeHome } from './pages/employee/EmployeeHome';
@@ -152,6 +154,7 @@ const AppRoutes: React.FC = () => {
         <Route path="/admin" element={<AdminLayout />}>
           <Route index element={<Navigate to="/admin/dashboard" replace />} />
           <Route path="dashboard" element={<AdminDashboard />} />
+          <Route path="notifications" element={<AdminNotificationsPage />} />
           <Route path="hr-managers" element={<HRManagersPage />} />
           <Route path="employees" element={<HREmployees />} />
           <Route path="documents" element={<HRDocumentsPage />} />
@@ -169,6 +172,7 @@ const AppRoutes: React.FC = () => {
         <Route path="/hr" element={<HRDashboardLayout />}>
           <Route index element={<Navigate to="/hr/dashboard" replace />} />
           <Route path="dashboard" element={<HRDashboardWrapper />} />
+          <Route path="notifications" element={<HRNotificationsPage />} />
           <Route path="employees" element={<HREmployees />} />
           <Route path="documents" element={<HRDocumentsPage />} />
           <Route path="payroll" element={<HRPayrollManagement />} />

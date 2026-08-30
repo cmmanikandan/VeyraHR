@@ -111,30 +111,53 @@ export const AdminLayout: React.FC = () => {
                     {adminNotifications.length === 0 ? (
                       <p className="text-xs text-slate-400 text-center py-6">No admin alerts yet.</p>
                     ) : (
-                      adminNotifications.slice(0, 10).map((n) => (
-                        <div
-                          key={n.id}
-                          onClick={() => {
-                            markNotificationRead(n.id);
-                            if (n.link_url) {
+                      adminNotifications.slice(0, 8).map((n) => {
+                        const resolveTarget = () => {
+                          const type = (n.type || '').toLowerCase();
+                          const url = n.link_url || '';
+                          if (type === 'security' || url.includes('security')) return '/admin/security';
+                          if (type === 'system' || url.includes('branch')) return '/admin/branches';
+                          if (url.includes('hr-manager')) return '/admin/hr-managers';
+                          if (type === 'payroll' || url.includes('payroll')) return '/admin/payroll';
+                          if (type === 'attendance' || type === 'leave' || url.includes('audit-log')) return '/admin/audit-logs';
+                          return '/admin/dashboard';
+                        };
+
+                        return (
+                          <div
+                            key={n.id}
+                            onClick={() => {
+                              markNotificationRead(n.id);
                               setIsNotifsOpen(false);
-                              navigate(n.link_url);
-                            }
-                          }}
-                          className={`pt-2 p-2 rounded-xl text-xs cursor-pointer transition-colors ${
-                            !n.is_read ? 'bg-indigo-50/50 hover:bg-indigo-50' : 'hover:bg-slate-50 opacity-70'
-                          }`}
-                        >
-                          <div className="flex items-start justify-between gap-2">
-                            <span className="font-extrabold text-slate-900 text-xs block leading-tight">{n.title}</span>
-                            <span className="text-[9px] text-slate-400 font-mono shrink-0">
-                              {new Date(n.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                            </span>
+                              navigate(resolveTarget());
+                            }}
+                            className={`pt-2 p-2 rounded-xl text-xs cursor-pointer transition-colors ${
+                              !n.is_read ? 'bg-indigo-50/50 hover:bg-indigo-50' : 'hover:bg-slate-50 opacity-70'
+                            }`}
+                          >
+                            <div className="flex items-start justify-between gap-2">
+                              <span className="font-extrabold text-slate-900 text-xs block leading-tight">{n.title}</span>
+                              <span className="text-[9px] text-slate-400 font-mono shrink-0">
+                                {new Date(n.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                              </span>
+                            </div>
+                            <p className="text-[11px] text-slate-600 mt-1 line-clamp-2 leading-relaxed">{n.message}</p>
                           </div>
-                          <p className="text-[11px] text-slate-600 mt-1 line-clamp-2 leading-relaxed">{n.message}</p>
-                        </div>
-                      ))
+                        );
+                      })
                     )}
+                  </div>
+
+                  <div className="pt-2 border-t border-slate-100 text-center">
+                    <button
+                      onClick={() => {
+                        setIsNotifsOpen(false);
+                        navigate('/admin/notifications');
+                      }}
+                      className="text-xs font-bold text-veyra-navy hover:text-blue-700 hover:underline"
+                    >
+                      View All System Governance Alerts →
+                    </button>
                   </div>
                 </div>
               )}
