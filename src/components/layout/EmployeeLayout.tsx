@@ -151,7 +151,13 @@ export const EmployeeLayout: React.FC<EmployeeLayoutProps> = ({
     }
   }, [isDarkMode]);
 
-  const unreadNotificationsCount = notifications.filter((n) => !n.is_read).length;
+  const employeeNotifications = React.useMemo(() => {
+    return notifications.filter(
+      (n) => n.recipient_role === 'employee' || n.recipient_role === 'all' || n.recipient_profile_id === currentEmp.id || n.recipient_profile_id === currentEmp.employee_id || n.recipient_profile_id === 'all'
+    );
+  }, [notifications, currentEmp]);
+
+  const unreadNotificationsCount = employeeNotifications.filter((n) => !n.is_read).length;
 
   const navItems: NavItem[] = [
     { id: 'home', label: 'Home', icon: Home },

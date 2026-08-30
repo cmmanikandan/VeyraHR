@@ -18,26 +18,43 @@ import {
 import { Card } from '../../components/ui/Card';
 import { Button } from '../../components/ui/Button';
 import { Badge } from '../../components/ui/Badge';
+import { useAuth } from '../../context/AuthContext';
 import { useData } from '../../context/DataContext';
 
 export const EmployeeNotifications: React.FC = () => {
-  const { notifications, markNotificationRead, markAllNotificationsRead } = useData();
+  const { profile } = useAuth();
+  const { notifications, employees, markNotificationRead, markAllNotificationsRead } = useData();
   const [selectedFilter, setSelectedFilter] = useState<'All' | 'HR' | 'Attendance' | 'Leave' | 'Payroll'>('All');
 
-  const unreadCount = notifications.filter((n) => !n.is_read).length;
+  const currentEmp = React.useMemo(() => {
+    if (profile?.email) {
+      const match = employees.find((e) => e.email?.toLowerCase() === profile.email.toLowerCase());
+      if (match) return match;
+    }
+    return employees[0] || { id: 'emp_current', employee_id: 'VEY-EMP-0001' };
+  }, [employees, profile]);
+
+  const employeeNotifications = React.useMemo(() => {
+    return notifications.filter(
+      (n) => n.recipient_role === 'employee' || n.recipient_role === 'all' || n.recipient_profile_id === currentEmp.id || n.recipient_profile_id === (currentEmp as any).employee_id || n.recipient_profile_id === 'all'
+    );
+  }, [notifications, currentEmp]);
+
+  const unreadCount = employeeNotifications.filter((n) => !n.is_read).length;
 
   const filterTabs: ('All' | 'HR' | 'Attendance' | 'Leave' | 'Payroll')[] = [
     'All', 'HR', 'Attendance', 'Leave', 'Payroll'
   ];
 
-  const filteredNotifications = notifications.filter((n) => {
+  const filteredNotifications = employeeNotifications.filter((n) => {
     if (selectedFilter === 'All') return true;
     const title = n.title.toLowerCase();
     const msg = n.message.toLowerCase();
-    if (selectedFilter === 'HR') return title.includes('hr') || msg.includes('policy') || msg.includes('announcement');
-    if (selectedFilter === 'Attendance') return title.includes('attendance') || title.includes('check-in') || title.includes('punch');
-    if (selectedFilter === 'Leave') return title.includes('leave') || title.includes('time-off');
-    if (selectedFilter === 'Payroll') return title.includes('salary') || title.includes('payslip') || title.includes('bonus');
+    const type = (n.type || '').toLowerCase();
+    if (selectedFilter === 'HR') return type === 'announcement' || type === 'system' || title.includes('hr') || msg.includes('policy');
+    if (selectedFilter === 'Attendance') return type === 'attendance' || title.includes('attendance') || title.includes('check-in');
+    if (selectedFilter === 'Leave') return type === 'leave' || title.includes('leave') || title.includes('time-off');
+    if (selectedFilter === 'Payroll') return type === 'payroll' || title.includes('salary') || title.includes('payslip') || title.includes('bonus');
     return true;
   });
 

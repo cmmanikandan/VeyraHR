@@ -70,6 +70,7 @@ interface DataContextType {
   addAnnouncement: (ann: Omit<Announcement, 'id' | 'created_at'>) => Promise<void>;
   markNotificationRead: (id: string) => Promise<void>;
   markAllNotificationsRead: () => Promise<void>;
+  addNotification: (notif: Omit<NotificationItem, 'id' | 'created_at' | 'is_read'>) => void;
   sendNotification: (title: string, body: string, url?: string, category?: string) => void;
   createCompanyBranch: (branch: Omit<Branch, 'id'>) => Promise<void>;
   deleteCompanyBranch: (id: string) => Promise<void>;
@@ -99,9 +100,11 @@ const DEFAULT_ATTENDANCE: AttendanceRecord[] = [];
 const DEFAULT_LEAVE_REQUESTS: LeaveRequest[] = [];
 const DEFAULT_ANNOUNCEMENTS: Announcement[] = [];
 const DEFAULT_NOTIFICATIONS: NotificationItem[] = [
+  // Employee Alerts
   {
-    id: 'notif_welcome',
+    id: 'notif_welcome_emp',
     recipient_profile_id: 'all',
+    recipient_role: 'employee',
     title: '👋 Welcome to VeyraHR Portal',
     message: 'Your biometric-free, QR and GPS-verified workplace portal is active. Scan or tap to mark shifts.',
     type: 'System',
@@ -110,8 +113,9 @@ const DEFAULT_NOTIFICATIONS: NotificationItem[] = [
     link_url: '/employee/home',
   },
   {
-    id: 'notif_geofence',
+    id: 'notif_geofence_emp',
     recipient_profile_id: 'all',
+    recipient_role: 'employee',
     title: '📍 Live GPS Geofence Workplace Monitoring',
     message: 'Automatic boundary detection is active. You will receive entry & exit notifications around your branch perimeter.',
     type: 'System',
@@ -120,14 +124,72 @@ const DEFAULT_NOTIFICATIONS: NotificationItem[] = [
     link_url: '/employee/attendance',
   },
   {
-    id: 'notif_holiday',
+    id: 'notif_payslip_emp',
     recipient_profile_id: 'all',
-    title: '🎉 Holiday & Operations Calendar',
-    message: 'Review upcoming company holidays and non-working weekends in the Leave & Calendar hub.',
-    type: 'Announcement',
+    recipient_role: 'employee',
+    title: '💰 Payslip Statement Available',
+    message: 'Your monthly compensation statement with attendance breakdown and tax details is ready in the Payslips tab.',
+    type: 'Payroll',
+    created_at: new Date(Date.now() - 7200000).toISOString(),
+    is_read: false,
+    link_url: '/employee/payslips',
+  },
+  // HR Operations Alerts
+  {
+    id: 'notif_hr_muster',
+    recipient_profile_id: 'hr',
+    recipient_role: 'hr_manager',
+    title: '📊 Daily Attendance Muster Roll',
+    message: '94% of staff have verified check-ins across Chennai HQ and regional branches today.',
+    type: 'Attendance',
+    created_at: new Date().toISOString(),
+    is_read: false,
+    link_url: '/hr/attendance',
+  },
+  {
+    id: 'notif_hr_payroll',
+    recipient_profile_id: 'hr',
+    recipient_role: 'hr_manager',
+    title: '💼 Monthly Payroll Cycle Ready',
+    message: 'Automated statutory PF & TDS calculations are ready for review and bank disbursement.',
+    type: 'Payroll',
     created_at: new Date(Date.now() - 3600000).toISOString(),
-    is_read: true,
-    link_url: '/employee/leave',
+    is_read: false,
+    link_url: '/hr/payroll',
+  },
+  {
+    id: 'notif_hr_leave_action',
+    recipient_profile_id: 'hr',
+    recipient_role: 'hr_manager',
+    title: '📝 Pending Leave & Shift Requests',
+    message: 'Review pending employee leave applications and shift swap approvals.',
+    type: 'Leave',
+    created_at: new Date(Date.now() - 5400000).toISOString(),
+    is_read: false,
+    link_url: '/hr/leaves',
+  },
+  // Admin System Governance Alerts
+  {
+    id: 'notif_admin_security',
+    recipient_profile_id: 'admin',
+    recipient_role: 'admin',
+    title: '🛡️ System Security & Session Guard',
+    message: 'All active HR manager sessions and branch perimeter geofence nodes are operating normally.',
+    type: 'Security',
+    created_at: new Date().toISOString(),
+    is_read: false,
+    link_url: '/admin/security',
+  },
+  {
+    id: 'notif_admin_branches',
+    recipient_profile_id: 'admin',
+    recipient_role: 'admin',
+    title: '🏢 Multi-Branch Network Status',
+    message: '4 regional branches synchronized with centralized company governance rules.',
+    type: 'System',
+    created_at: new Date(Date.now() - 7200000).toISOString(),
+    is_read: false,
+    link_url: '/admin/branches',
   },
 ];
 
@@ -1127,40 +1189,48 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return updatedRecord!;
   };
 
-  const sendBrowserNotification = (title: string, body: string, url?: string, category: string = 'System') => {
-    triggerAppNotification({
-      title,
-      body,
-      url: url || '/',
-    });
-
-    const newNotif: NotificationItem = {
+  const addNotification = (item: Omit<NotificationItem, 'id' | 'created_at' | 'is_read'>) => {
+    const newItem: NotificationItem = {
+      ...item,
       id: `notif_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
-      recipient_profile_id: 'all',
-      title,
-      message: body,
-      type: (category as any) || 'System',
       created_at: new Date().toISOString(),
       is_read: false,
-      link_url: url || '/',
     };
 
     setNotifications((prev) => {
-      const updated = [newNotif, ...prev];
+      const updated = [newItem, ...prev];
       try { localStorage.setItem('veyra_notifications', JSON.stringify(updated)); } catch {}
       return updated;
     });
 
-    // Native mobile / browser vibration and notification
+    triggerAppNotification({
+      title: newItem.title,
+      body: newItem.message,
+      url: newItem.link_url || '/',
+      tag: newItem.type?.toLowerCase(),
+    });
+
+    // Native browser notification if allowed
     if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted') {
       try {
-        new Notification(title, {
-          body,
+        new Notification(newItem.title, {
+          body: newItem.message,
           icon: '/favicon.ico',
         });
         if ('vibrate' in navigator) navigator.vibrate([150, 60, 150]);
       } catch {}
     }
+  };
+
+  const sendBrowserNotification = (title: string, body: string, url?: string, category: string = 'System') => {
+    addNotification({
+      recipient_profile_id: 'all',
+      recipient_role: 'all',
+      title,
+      message: body,
+      type: (category as any) || 'System',
+      link_url: url || '/',
+    });
   };
 
   const submitLeaveRequest = async (req: Omit<LeaveRequest, 'id' | 'status' | 'created_at'>): Promise<LeaveRequest> => {
@@ -1202,18 +1272,22 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       console.warn('Leave request sync notice:', e);
     }
 
-    // 3. Dispatch multi-channel notification to Unified Inbox & Mobile
-    sendBrowserNotification(
-      `📋 New Leave Application: ${newReq.employee_name || 'Staff Member'}`,
-      `${newReq.employee_name || 'An employee'} applied for ${newReq.total_days}d of ${newReq.leave_type_name} (${newReq.start_date} to ${newReq.end_date}). Reason: ${newReq.reason || 'Personal'}`,
-      '/hr/leave',
-      'Leave'
-    );
+    // 3. Dispatch targeted notification to HR Operations
+    addNotification({
+      recipient_profile_id: 'hr',
+      recipient_role: 'hr_manager',
+      title: `📝 New Leave Application: ${newReq.employee_name || 'Staff Member'}`,
+      message: `${newReq.employee_name || 'An employee'} applied for ${newReq.total_days}d of ${newReq.leave_type_name} (${newReq.start_date} to ${newReq.end_date}). Reason: ${newReq.reason || 'Personal'}`,
+      type: 'Leave',
+      link_url: '/hr/leaves',
+    });
 
     return newReq;
   };
 
   const updateLeaveStatus = async (requestId: string, status: 'Approved' | 'Rejected', comments?: string) => {
+    const targetReq = leaveRequests.find((l) => l.id === requestId);
+
     // 1. Persist to Supabase
     try {
       await supabase
@@ -1231,13 +1305,15 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       return updated;
     });
 
-    // 3. Dispatch notification
-    sendBrowserNotification(
-      `Leave Request ${status}!`,
-      `Your time-off application was ${status.toLowerCase()} by HR Operations. ${comments ? `Feedback: ${comments}` : ''}`,
-      '/employee/leave',
-      'Leave'
-    );
+    // 3. Dispatch targeted notification to the specific employee
+    addNotification({
+      recipient_profile_id: targetReq?.employee_id || 'all',
+      recipient_role: 'employee',
+      title: `Leave Request ${status}!`,
+      message: `Your time-off application for ${targetReq?.start_date || 'requested dates'} was ${status.toLowerCase()} by HR Operations. ${comments ? `Feedback: ${comments}` : ''}`,
+      type: 'Leave',
+      link_url: '/employee/leave',
+    });
   };
 
   const submitCorrection = async (correction: Omit<AttendanceCorrection, 'id' | 'status' | 'created_at'>) => {
@@ -1254,12 +1330,15 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
     setCorrections((prev) => [newCorr, ...prev]);
 
-    sendBrowserNotification(
-      '✏️ New Attendance Correction Submitted',
-      `Correction request submitted for date ${newCorr.attendance_date}. Reason: ${newCorr.reason || 'Punch adjustment'}`,
-      '/hr/attendance',
-      'Attendance'
-    );
+    // Dispatch targeted notification to HR Operations
+    addNotification({
+      recipient_profile_id: 'hr',
+      recipient_role: 'hr_manager',
+      title: '⏰ New Attendance Correction Submitted',
+      message: `Correction request submitted for date ${newCorr.attendance_date}. Reason: ${newCorr.reason || 'Punch adjustment'}`,
+      type: 'Attendance',
+      link_url: '/hr/attendance',
+    });
   };
 
   const updateCorrectionStatus = async (id: string, status: 'Approved' | 'Rejected', comments?: string) => {
@@ -1895,6 +1974,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         addAnnouncement,
         markNotificationRead,
         markAllNotificationsRead,
+        addNotification,
         sendNotification: sendBrowserNotification,
         createCompanyBranch,
         deleteCompanyBranch,

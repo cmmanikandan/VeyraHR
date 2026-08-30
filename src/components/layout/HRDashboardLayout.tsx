@@ -21,7 +21,12 @@ export const HRDashboardLayout: React.FC = () => {
   };
 
   const userInitial = (profile?.full_name?.charAt(0) || 'H').toUpperCase();
-  const unreadCount = notifications.filter((n) => !n.is_read).length;
+  const hrNotifications = React.useMemo(() => {
+    return notifications.filter(
+      (n) => n.recipient_role === 'hr_manager' || n.recipient_role === 'all' || n.recipient_profile_id === 'hr' || n.recipient_profile_id === 'all'
+    );
+  }, [notifications]);
+  const unreadCount = hrNotifications.filter((n) => !n.is_read).length;
 
   return (
     <div className="min-h-screen bg-[#FCFAF7] flex text-[#172033]">
@@ -76,7 +81,7 @@ export const HRDashboardLayout: React.FC = () => {
                 type="button"
                 onClick={() => setIsNotifsOpen(!isNotifsOpen)}
                 className="w-9 h-9 rounded-xl bg-[#FAF8F5] hover:bg-[#F0EBE3] border border-[#E8E2D9] text-slate-700 hover:text-blue-700 flex items-center justify-center transition-all relative shadow-2xs"
-                title="Notifications"
+                title="HR Notifications"
               >
                 <Bell className="w-4 h-4" />
                 {unreadCount > 0 && (
@@ -105,10 +110,10 @@ export const HRDashboardLayout: React.FC = () => {
                   </div>
 
                   <div className="max-h-72 overflow-y-auto space-y-2 divide-y divide-slate-100">
-                    {notifications.length === 0 ? (
-                      <p className="text-xs text-slate-400 text-center py-6">No notifications yet.</p>
+                    {hrNotifications.length === 0 ? (
+                      <p className="text-xs text-slate-400 text-center py-6">No HR notifications yet.</p>
                     ) : (
-                      notifications.slice(0, 10).map((n) => (
+                      hrNotifications.slice(0, 10).map((n) => (
                         <div
                           key={n.id}
                           onClick={() => {

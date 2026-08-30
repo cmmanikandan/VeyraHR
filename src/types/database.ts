@@ -319,10 +319,11 @@ export interface Announcement {
 
 export interface NotificationItem {
   id: string;
-  recipient_profile_id: string;
+  recipient_profile_id: string; // Specific ID or 'all', 'hr', 'admin'
+  recipient_role?: 'all' | 'admin' | 'hr_manager' | 'employee';
   title: string;
   message: string;
-  type: 'Attendance' | 'Leave' | 'Shift' | 'Announcement' | 'System';
+  type: 'Attendance' | 'Leave' | 'Payroll' | 'Shift' | 'Security' | 'Announcement' | 'System' | 'Onboarding';
   is_read: boolean;
   link_url?: string;
   created_at: string;
